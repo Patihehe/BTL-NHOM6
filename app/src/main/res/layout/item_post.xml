@@ -36,7 +36,16 @@
             android:layout_height="wrap_content"
             android:text="Post content goes here..."
             android:textSize="15sp"
-            android:textColor="@android:color/black" />
+            android:textColor="@android:color/black"
+            android:layout_marginBottom="8dp"/>
+
+        <ImageView
+            android:id="@+id/ivPostImage"
+            android:layout_width="match_parent"
+            android:layout_height="250dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:layout_marginTop="4dp"/>
 
     </LinearLayout>
 </androidx.cardview.widget.CardView>

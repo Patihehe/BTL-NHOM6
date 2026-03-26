@@ -10,11 +10,13 @@ public class Post {
 
     private String userName;
     private String content;
+    private String imageUri; // Lưu URI của hình ảnh
     private long timestamp;
 
-    public Post(String userName, String content, long timestamp) {
+    public Post(String userName, String content, String imageUri, long timestamp) {
         this.userName = userName;
         this.content = content;
+        this.imageUri = imageUri;
         this.timestamp = timestamp;
     }
 
@@ -26,6 +28,9 @@ public class Post {
 
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
+    public String getImageUri() { return imageUri; }
+    public void setImageUri(String imageUri) { this.imageUri = imageUri; }
 
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }

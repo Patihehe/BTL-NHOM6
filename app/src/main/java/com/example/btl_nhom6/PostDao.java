@@ -1,6 +1,7 @@
 package com.example.btl_nhom6;
 
 import androidx.room.Dao;
+import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.Query;
 import java.util.List;
@@ -12,4 +13,7 @@ public interface PostDao {
 
     @Query("SELECT * FROM posts ORDER BY timestamp DESC")
     List<Post> getAllPosts();
+
+    @Delete
+    void deletePost(Post post);
 }

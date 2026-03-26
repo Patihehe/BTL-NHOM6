@@ -16,33 +16,91 @@
         app:titleTextColor="@android:color/white"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <ImageButton
+        android:id="@+id/btnLogout"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@android:drawable/ic_lock_power_off"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        app:layout_constraintTop_toTopOf="@id/toolbar"
+        app:layout_constraintBottom_toBottomOf="@id/toolbar"
+        app:layout_constraintEnd_toEndOf="@id/toolbar"
+        android:layout_marginEnd="8dp"
+        android:elevation="5dp"
+        app:tint="@android:color/white" />
+
     <LinearLayout
         android:id="@+id/llCreatePost"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:padding="12dp"
         android:background="@android:color/white"
         app:layout_constraintTop_toBottomOf="@id/toolbar">
 
-        <EditText
-            android:id="@+id/etPostInput"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="What's on your mind?"
-            android:background="@android:drawable/editbox_background"
-            android:padding="10dp"
-            android:textSize="14sp" />
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/btnPost"
-            android:layout_width="wrap_content"
+            <EditText
+                android:id="@+id/etPostInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="What's on your mind?"
+                android:background="@android:drawable/editbox_background"
+                android:padding="10dp"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btnPost"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Post"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="#1877F2"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Post"
-            android:layout_marginStart="8dp"
-            android:backgroundTint="#1877F2"
-            android:textSize="12sp" />
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical">
+
+            <ImageButton
+                android:id="@+id/btnPickImage"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_menu_gallery"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:scaleType="centerInside" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Photo"
+                android:layout_marginStart="4dp"
+                android:textSize="12sp"/>
+
+            <ImageView
+                android:id="@+id/ivSelectedPreview"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_marginStart="20dp"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/btnClearImage"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:visibility="gone"/>
+        </LinearLayout>
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
