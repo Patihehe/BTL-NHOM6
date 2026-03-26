@@ -1,6 +1,7 @@
 package com.example.btl_nhom6;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -41,6 +42,12 @@ public class LoginActivity extends AppCompatActivity {
                     // Kiểm tra đăng nhập trong Room Database
                     User user = db.userDao().login(email, password);
                     if (user != null) {
+                        // LƯU TÊN NGƯỜI DÙNG VÀO SHAREDPREFERENCES
+                        SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+                        SharedPreferences.Editor editor = pref.edit();
+                        editor.putString("current_user_name", user.getFullName());
+                        editor.apply();
+
                         Toast.makeText(LoginActivity.this, "Đăng nhập thành công! Chào " + user.getFullName(), Toast.LENGTH_SHORT).show();
                         Intent intent = new Intent(LoginActivity.this, MainActivity.class);
                         startActivity(intent);
