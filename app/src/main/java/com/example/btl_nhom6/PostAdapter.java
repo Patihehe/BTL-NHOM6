@@ -9,7 +9,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
@@ -25,6 +24,7 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
     private OnPostActionListener actionListener;
     private AppDatabase db;
     private int currentUserId;
+    private String currentUserName;
 
     public interface OnPostLongClickListener {
         void onPostLongClick(Post post);
@@ -47,6 +47,7 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         db = AppDatabase.getInstance(parent.getContext());
         SharedPreferences pref = parent.getContext().getSharedPreferences("AppPrefs", Context.MODE_PRIVATE);
         currentUserId = pref.getInt("current_user_id", -1);
+        currentUserName = pref.getString("current_user_name", "Ai đó");
         
         View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_post, parent, false);
         return new PostViewHolder(view);
@@ -61,7 +62,6 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm dd/MM/yyyy", Locale.getDefault());
         holder.tvTimestamp.setText(sdf.format(new Date(post.getTimestamp())));
 
-        // Xử lý hình ảnh
         if (post.getImageUri() != null && !post.getImageUri().isEmpty()) {
             holder.ivPostImage.setVisibility(View.VISIBLE);
             Glide.with(holder.itemView.getContext())
@@ -71,13 +71,11 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
             holder.ivPostImage.setVisibility(View.GONE);
         }
 
-        // Cập nhật số lượng Like và Comment
         int likeCount = db.likeDao().getLikeCount(post.getId());
         int commentCount = db.commentDao().getCommentCount(post.getId());
         holder.tvLikeCount.setText(likeCount + " Lượt thích");
         holder.tvCommentCount.setText(commentCount + " Bình luận");
 
-        // Kiểm tra xem user hiện tại đã like chưa
         Like userLike = db.likeDao().getLike(post.getId(), currentUserId);
         if (userLike != null) {
             holder.btnLike.setTextColor(Color.parseColor("#1877F2"));
@@ -87,46 +85,55 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
             holder.btnLike.setText("Thích");
         }
 
-        // Xử lý nút Like
         holder.btnLike.setOnClickListener(v -> {
             if (userLike != null) {
                 db.likeDao().deleteLike(post.getId(), currentUserId);
             } else {
                 db.likeDao().insertLike(new Like(post.getId(), currentUserId));
+                
+                // TẠO THÔNG BÁO KHI LIKE
+                if (post.getUserId() != currentUserId) {
+                    User postOwner = db.userDao().getUserById(post.getUserId());
+                    if (postOwner != null) {
+                        String content = currentUserName + " đã thích bài viết của bạn: \"" + truncate(post.getContent(), 20) + "\"";
+                        Notification notif = new Notification(postOwner.getEmail(), content, System.currentTimeMillis());
+                        db.notificationDao().insertNotification(notif);
+                    }
+                }
             }
             notifyItemChanged(position);
         });
 
-        // Xử lý nút Comment
         holder.btnComment.setOnClickListener(v -> {
             if (actionListener != null) {
                 actionListener.onCommentClick(post);
             }
         });
 
-        // Xử lý nút Share
         holder.btnShare.setOnClickListener(v -> {
             if (actionListener != null) {
                 actionListener.onShareClick(post);
             }
         });
 
-        // Khi nhấn vào tên người dùng -> Chuyển tới trang cá nhân
         holder.tvUserName.setOnClickListener(v -> {
             Intent intent = new Intent(holder.itemView.getContext(), ProfileActivity.class);
             intent.putExtra("profile_user_id", post.getUserId());
             holder.itemView.getContext().startActivity(intent);
         });
 
-        holder.itemView.setOnLongClickListener(new View.OnLongClickListener() {
-            @Override
-            public boolean onLongClick(View v) {
-                if (longClickListener != null) {
-                    longClickListener.onPostLongClick(post);
-                }
-                return true;
+        holder.itemView.setOnLongClickListener(v -> {
+            if (longClickListener != null) {
+                longClickListener.onPostLongClick(post);
             }
+            return true;
         });
+    }
+
+    private String truncate(String text, int length) {
+        if (text == null) return "";
+        if (text.length() <= length) return text;
+        return text.substring(0, length) + "...";
     }
 
     @Override

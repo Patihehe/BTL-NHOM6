@@ -30,7 +30,7 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
 
     private ImageView ivCover, ivAvatar;
     private TextView tvFullName, tvBio, tvLocation, tvDob;
-    private Button btnEditProfile;
+    private Button btnEditProfile, btnChat;
     private RecyclerView rvUserPosts;
     private PostAdapter postAdapter;
     private List<Post> userPostList;
@@ -71,7 +71,6 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         currentUserId = pref.getInt("current_user_id", -1);
 
-        // Nhận profileUserId từ Intent, nếu không có thì mặc định là người dùng hiện tại
         profileUserId = getIntent().getIntExtra("profile_user_id", currentUserId);
 
         if (profileUserId == -1) {
@@ -88,13 +87,14 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         tvLocation = findViewById(R.id.tvLocation);
         tvDob = findViewById(R.id.tvDob);
         btnEditProfile = findViewById(R.id.btnEditProfile);
+        btnChat = findViewById(R.id.btnChat);
         rvUserPosts = findViewById(R.id.rvUserPosts);
 
         displayUserInfo();
 
-        // Ẩn nút Edit nếu không phải trang của mình
         if (profileUserId != currentUserId) {
             btnEditProfile.setVisibility(View.GONE);
+            btnChat.setVisibility(View.VISIBLE);
         }
 
         userPostList = new ArrayList<>();
@@ -117,6 +117,13 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         loadUserPosts();
 
         btnEditProfile.setOnClickListener(v -> showEditProfileDialog());
+        
+        btnChat.setOnClickListener(v -> {
+            Intent intent = new Intent(ProfileActivity.this, ChatActivity.class);
+            intent.putExtra("receiver_email", profileUser.getEmail());
+            intent.putExtra("receiver_name", profileUser.getFullName());
+            startActivity(intent);
+        });
     }
 
     private void displayUserInfo() {

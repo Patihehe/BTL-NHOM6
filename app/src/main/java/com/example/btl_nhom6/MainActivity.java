@@ -12,6 +12,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -28,17 +29,18 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
 
     private EditText etPostInput;
     private Button btnPost;
-    private ImageButton btnPickImage, btnClearImage, btnLogout, btnGoToProfile, btnSocial;
+    private ImageButton btnPickImage, btnClearImage, btnLogout, btnGoToProfile, btnSocial, btnMessenger, btnNotifications;
+    private TextView tvNotifBadge;
     private ImageView ivSelectedPreview;
     private RecyclerView recyclerViewPosts;
     private PostAdapter postAdapter;
     private List<Post> postList;
     private AppDatabase db;
     private String currentUserName;
+    private String currentUserEmail;
     private int currentUserId;
     private Uri selectedImageUri = null;
 
-    // Bộ chọn ảnh từ thư viện
     private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
             new ActivityResultContracts.GetContent(),
             uri -> {
@@ -66,6 +68,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         currentUserId = pref.getInt("current_user_id", -1);
         currentUserName = pref.getString("current_user_name", "Anonymous");
+        currentUserEmail = pref.getString("current_user_email", "");
 
         if (currentUserId == -1) {
             Intent intent = new Intent(MainActivity.this, LoginActivity.class);
@@ -74,7 +77,6 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
             return;
         }
 
-        // Khởi tạo View
         etPostInput = findViewById(R.id.etPostInput);
         btnPost = findViewById(R.id.btnPost);
         btnPickImage = findViewById(R.id.btnPickImage);
@@ -82,33 +84,31 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         btnLogout = findViewById(R.id.btnLogout);
         btnGoToProfile = findViewById(R.id.btnGoToProfile);
         btnSocial = findViewById(R.id.btnSocial);
+        btnMessenger = findViewById(R.id.btnMessenger);
+        btnNotifications = findViewById(R.id.btnNotifications);
+        tvNotifBadge = findViewById(R.id.tvNotifBadge);
         ivSelectedPreview = findViewById(R.id.ivSelectedPreview);
         recyclerViewPosts = findViewById(R.id.recyclerViewPosts);
 
-        // Thiết lập RecyclerView
         postList = new ArrayList<>();
         postAdapter = new PostAdapter(postList, this::showDeleteConfirmDialog, this);
         recyclerViewPosts.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewPosts.setAdapter(postAdapter);
 
         loadPosts();
+        updateNotificationBadge();
 
-        // Chọn ảnh
         btnPickImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
-
-        // Hủy chọn ảnh
         btnClearImage.setOnClickListener(v -> {
             selectedImageUri = null;
             ivSelectedPreview.setVisibility(View.GONE);
             btnClearImage.setVisibility(View.GONE);
         });
 
-        // Đăng bài
         btnPost.setOnClickListener(v -> {
             String content = etPostInput.getText().toString().trim();
             if (!content.isEmpty() || selectedImageUri != null) {
                 String uriString = (selectedImageUri != null) ? selectedImageUri.toString() : "";
-                // Cập nhật lại userName từ DB phòng trường hợp người dùng vừa đổi tên
                 User user = db.userDao().getUserById(currentUserId);
                 String name = (user != null) ? user.getFullName() : currentUserName;
                 
@@ -122,24 +122,29 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                 
                 loadPosts();
                 Toast.makeText(MainActivity.this, "Đã đăng bài!", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(MainActivity.this, "Vui lòng nhập nội dung hoặc chọn ảnh", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // Vào trang cá nhân
         btnGoToProfile.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, ProfileActivity.class);
             startActivity(intent);
         });
 
-        // Vào trang kết nối (Friends & Social)
         btnSocial.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, SocialActivity.class);
             startActivity(intent);
         });
 
-        // Xử lý Đăng xuất
+        btnMessenger.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, ChatListActivity.class);
+            startActivity(intent);
+        });
+
+        btnNotifications.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, NotificationActivity.class);
+            startActivity(intent);
+        });
+
         btnLogout.setOnClickListener(v -> {
             new AlertDialog.Builder(MainActivity.this)
                     .setTitle("Đăng xuất")
@@ -148,7 +153,6 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                         SharedPreferences.Editor editor = pref.edit();
                         editor.clear();
                         editor.apply();
-
                         Intent intent = new Intent(MainActivity.this, LoginActivity.class);
                         startActivity(intent);
                         finish();
@@ -156,6 +160,21 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                     .setNegativeButton("Hủy", null)
                     .show();
         });
+    }
+
+    private void updateNotificationBadge() {
+        List<Notification> notifs = db.notificationDao().getNotificationsForUser(currentUserEmail);
+        int unreadCount = 0;
+        for (Notification n : notifs) {
+            if (!n.isRead()) unreadCount++;
+        }
+
+        if (unreadCount > 0) {
+            tvNotifBadge.setText(String.valueOf(unreadCount));
+            tvNotifBadge.setVisibility(View.VISIBLE);
+        } else {
+            tvNotifBadge.setVisibility(View.GONE);
+        }
     }
 
     private void showDeleteConfirmDialog(Post post) {
@@ -180,7 +199,8 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     @Override
     protected void onResume() {
         super.onResume();
-        loadPosts(); // Load lại posts nhỡ có đổi tên hiển thị
+        loadPosts();
+        updateNotificationBadge();
     }
 
     @Override
@@ -189,16 +209,11 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         RecyclerView rvComments = dialogView.findViewById(R.id.rvComments);
         EditText etCommentInput = dialogView.findViewById(R.id.etCommentInput);
         ImageButton btnSendComment = dialogView.findViewById(R.id.btnSendComment);
-
         List<Comment> commentList = db.commentDao().getCommentsByPostId(post.getId());
         CommentAdapter commentAdapter = new CommentAdapter(commentList);
         rvComments.setLayoutManager(new LinearLayoutManager(this));
         rvComments.setAdapter(commentAdapter);
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setView(dialogView)
-                .create();
-
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(dialogView).create();
         btnSendComment.setOnClickListener(v -> {
             String content = etCommentInput.getText().toString().trim();
             if (!content.isEmpty()) {
@@ -206,16 +221,24 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                 Comment comment = new Comment(post.getId(), currentUserId, user.getFullName(), content, System.currentTimeMillis());
                 db.commentDao().insertComment(comment);
                 
+                // TẠO THÔNG BÁO COMMENT
+                if (post.getUserId() != currentUserId) {
+                    User postOwner = db.userDao().getUserById(post.getUserId());
+                    if (postOwner != null) {
+                        String notifContent = user.getFullName() + " đã bình luận về bài viết của bạn: \"" + content + "\"";
+                        Notification notif = new Notification(postOwner.getEmail(), notifContent, System.currentTimeMillis());
+                        db.notificationDao().insertNotification(notif);
+                    }
+                }
+
                 etCommentInput.setText("");
                 commentList.clear();
                 commentList.addAll(db.commentDao().getCommentsByPostId(post.getId()));
                 commentAdapter.notifyDataSetChanged();
                 rvComments.scrollToPosition(commentList.size() - 1);
-                
-                postAdapter.notifyDataSetChanged(); // Cập nhật số lượng comment ở ngoài
+                postAdapter.notifyDataSetChanged();
             }
         });
-
         dialog.show();
     }
 
@@ -229,6 +252,17 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                     String sharedContent = "[Shared from " + post.getUserName() + "]: " + post.getContent();
                     Post sharedPost = new Post(currentUserId, user.getFullName(), sharedContent, post.getImageUri(), System.currentTimeMillis());
                     db.postDao().insertPost(sharedPost);
+                    
+                    // TẠO THÔNG BÁO SHARE
+                    if (post.getUserId() != currentUserId) {
+                        User postOwner = db.userDao().getUserById(post.getUserId());
+                        if (postOwner != null) {
+                            String notifContent = user.getFullName() + " đã chia sẻ bài viết của bạn.";
+                            Notification notif = new Notification(postOwner.getEmail(), notifContent, System.currentTimeMillis());
+                            db.notificationDao().insertNotification(notif);
+                        }
+                    }
+
                     loadPosts();
                     Toast.makeText(MainActivity.this, "Đã chia sẻ lên tường cá nhân", Toast.LENGTH_SHORT).show();
                 })
