@@ -5,7 +5,7 @@ import androidx.room.Database;
 import androidx.room.Room;
 import androidx.room.RoomDatabase;
 
-@Database(entities = {User.class, Post.class, Comment.class, Like.class}, version = 7)
+@Database(entities = {User.class, Post.class, Comment.class, Like.class, Friendship.class}, version = 10)
 public abstract class AppDatabase extends RoomDatabase {
     private static AppDatabase instance;
 
@@ -13,6 +13,7 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract PostDao postDao();
     public abstract CommentDao commentDao();
     public abstract LikeDao likeDao();
+    public abstract FriendshipDao friendshipDao();
 
     public static synchronized AppDatabase getInstance(Context context) {
         if (instance == null) {

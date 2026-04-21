@@ -28,7 +28,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
 
     private EditText etPostInput;
     private Button btnPost;
-    private ImageButton btnPickImage, btnClearImage, btnLogout, btnGoToProfile;
+    private ImageButton btnPickImage, btnClearImage, btnLogout, btnGoToProfile, btnSocial;
     private ImageView ivSelectedPreview;
     private RecyclerView recyclerViewPosts;
     private PostAdapter postAdapter;
@@ -81,6 +81,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         btnClearImage = findViewById(R.id.btnClearImage);
         btnLogout = findViewById(R.id.btnLogout);
         btnGoToProfile = findViewById(R.id.btnGoToProfile);
+        btnSocial = findViewById(R.id.btnSocial);
         ivSelectedPreview = findViewById(R.id.ivSelectedPreview);
         recyclerViewPosts = findViewById(R.id.recyclerViewPosts);
 
@@ -129,6 +130,12 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         // Vào trang cá nhân
         btnGoToProfile.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, ProfileActivity.class);
+            startActivity(intent);
+        });
+
+        // Vào trang kết nối (Friends & Social)
+        btnSocial.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, SocialActivity.class);
             startActivity(intent);
         });
 

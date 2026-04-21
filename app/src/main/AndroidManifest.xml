@@ -34,6 +34,11 @@
             android:exported="false"
             android:label="Trang cá nhân" />
 
+        <activity
+            android:name=".SocialActivity"
+            android:exported="false"
+            android:label="Kết nối" />
+
     </application>
 
 </manifest>

@@ -41,6 +41,14 @@
                     android:orientation="horizontal">
 
                     <ImageButton
+                        android:id="@+id/btnSocial"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@android:drawable/ic_menu_share"
+                        app:tint="@android:color/white" />
+
+                    <ImageButton
                         android:id="@+id/btnGoToProfile"
                         android:layout_width="48dp"
                         android:layout_height="48dp"

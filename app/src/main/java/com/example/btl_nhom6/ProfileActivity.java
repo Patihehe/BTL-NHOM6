@@ -35,7 +35,8 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
     private PostAdapter postAdapter;
     private List<Post> userPostList;
     private AppDatabase db;
-    private User currentUser;
+    private User profileUser;
+    private int profileUserId;
     private int currentUserId;
 
     private boolean isChangingAvatar = false;
@@ -50,13 +51,13 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
                         e.printStackTrace();
                     }
                     if (isChangingAvatar) {
-                        currentUser.setAvatarUri(uri.toString());
+                        profileUser.setAvatarUri(uri.toString());
                         Glide.with(this).load(uri).into(ivAvatar);
                     } else {
-                        currentUser.setCoverPhotoUri(uri.toString());
+                        profileUser.setCoverPhotoUri(uri.toString());
                         Glide.with(this).load(uri).into(ivCover);
                     }
-                    db.userDao().updateUser(currentUser);
+                    db.userDao().updateUser(profileUser);
                 }
             }
     );
@@ -70,12 +71,15 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         currentUserId = pref.getInt("current_user_id", -1);
 
-        if (currentUserId == -1) {
+        // Nhận profileUserId từ Intent, nếu không có thì mặc định là người dùng hiện tại
+        profileUserId = getIntent().getIntExtra("profile_user_id", currentUserId);
+
+        if (profileUserId == -1) {
             finish();
             return;
         }
 
-        currentUser = db.userDao().getUserById(currentUserId);
+        profileUser = db.userDao().getUserById(profileUserId);
 
         ivCover = findViewById(R.id.ivCover);
         ivAvatar = findViewById(R.id.ivAvatar);
@@ -88,17 +92,24 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
 
         displayUserInfo();
 
+        // Ẩn nút Edit nếu không phải trang của mình
+        if (profileUserId != currentUserId) {
+            btnEditProfile.setVisibility(View.GONE);
+        }
+
         userPostList = new ArrayList<>();
         postAdapter = new PostAdapter(userPostList, post -> {
-            new AlertDialog.Builder(this)
-                    .setTitle("Xóa bài viết")
-                    .setMessage("Bạn có chắc chắn muốn xóa bài viết này không?")
-                    .setPositiveButton("Xóa", (dialog, which) -> {
-                        db.postDao().deletePost(post);
-                        loadUserPosts();
-                    })
-                    .setNegativeButton("Hủy", null)
-                    .show();
+            if (profileUserId == currentUserId) {
+                new AlertDialog.Builder(this)
+                        .setTitle("Xóa bài viết")
+                        .setMessage("Bạn có chắc chắn muốn xóa bài viết này không?")
+                        .setPositiveButton("Xóa", (dialog, which) -> {
+                            db.postDao().deletePost(post);
+                            loadUserPosts();
+                        })
+                        .setNegativeButton("Hủy", null)
+                        .show();
+            }
         }, this);
         rvUserPosts.setLayoutManager(new LinearLayoutManager(this));
         rvUserPosts.setAdapter(postAdapter);
@@ -109,22 +120,24 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
     }
 
     private void displayUserInfo() {
-        tvFullName.setText(currentUser.getFullName());
-        tvBio.setText(currentUser.getBio() != null && !currentUser.getBio().isEmpty() ? currentUser.getBio() : "Chưa có tiểu sử");
-        tvLocation.setText("Sống tại " + (currentUser.getLocation() != null && !currentUser.getLocation().isEmpty() ? currentUser.getLocation() : "..."));
-        tvDob.setText("Ngày sinh: " + (currentUser.getDob() != null && !currentUser.getDob().isEmpty() ? currentUser.getDob() : "..."));
+        tvFullName.setText(profileUser.getFullName());
+        tvBio.setText(profileUser.getBio() != null && !profileUser.getBio().isEmpty() ? profileUser.getBio() : "Chưa có tiểu sử");
+        tvLocation.setText("Sống tại " + (profileUser.getLocation() != null && !profileUser.getLocation().isEmpty() ? profileUser.getLocation() : "..."));
+        tvDob.setText("Ngày sinh: " + (profileUser.getDob() != null && !profileUser.getDob().isEmpty() ? profileUser.getDob() : "..."));
 
-        if (currentUser.getAvatarUri() != null) {
-            Glide.with(this).load(Uri.parse(currentUser.getAvatarUri())).into(ivAvatar);
+        if (profileUser.getAvatarUri() != null) {
+            Glide.with(this).load(Uri.parse(profileUser.getAvatarUri())).into(ivAvatar);
+        } else {
+            ivAvatar.setImageResource(android.R.drawable.ic_menu_report_image);
         }
-        if (currentUser.getCoverPhotoUri() != null) {
-            Glide.with(this).load(Uri.parse(currentUser.getCoverPhotoUri())).into(ivCover);
+        if (profileUser.getCoverPhotoUri() != null) {
+            Glide.with(this).load(Uri.parse(profileUser.getCoverPhotoUri())).into(ivCover);
         }
     }
 
     private void loadUserPosts() {
         userPostList.clear();
-        userPostList.addAll(db.postDao().getPostsByUserId(currentUserId));
+        userPostList.addAll(db.postDao().getPostsByUserId(profileUserId));
         postAdapter.notifyDataSetChanged();
     }
 
@@ -140,18 +153,18 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         Button btnChangeAvatar = view.findViewById(R.id.btnChangeAvatar);
         Button btnChangeCover = view.findViewById(R.id.btnChangeCover);
 
-        etEditName.setText(currentUser.getFullName());
-        etEditBio.setText(currentUser.getBio());
-        etEditDob.setText(currentUser.getDob());
-        etEditLocation.setText(currentUser.getLocation());
+        etEditName.setText(profileUser.getFullName());
+        etEditBio.setText(profileUser.getBio());
+        etEditDob.setText(profileUser.getDob());
+        etEditLocation.setText(profileUser.getLocation());
 
         builder.setPositiveButton("Lưu", (dialog, which) -> {
-            currentUser.setFullName(etEditName.getText().toString());
-            currentUser.setBio(etEditBio.getText().toString());
-            currentUser.setDob(etEditDob.getText().toString());
-            currentUser.setLocation(etEditLocation.getText().toString());
+            profileUser.setFullName(etEditName.getText().toString());
+            profileUser.setBio(etEditBio.getText().toString());
+            profileUser.setDob(etEditDob.getText().toString());
+            profileUser.setLocation(etEditLocation.getText().toString());
 
-            db.userDao().updateUser(currentUser);
+            db.userDao().updateUser(profileUser);
             displayUserInfo();
             Toast.makeText(this, "Đã cập nhật hồ sơ", Toast.LENGTH_SHORT).show();
         });
@@ -219,7 +232,6 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
                     String sharedContent = "[Shared from " + post.getUserName() + "]: " + post.getContent();
                     Post sharedPost = new Post(currentUserId, user.getFullName(), sharedContent, post.getImageUri(), System.currentTimeMillis());
                     db.postDao().insertPost(sharedPost);
-                    loadUserPosts();
                     Toast.makeText(this, "Đã chia sẻ lên tường cá nhân", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Hủy", null)

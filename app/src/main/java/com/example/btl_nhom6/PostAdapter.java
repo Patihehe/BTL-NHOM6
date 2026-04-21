@@ -1,6 +1,7 @@
 package com.example.btl_nhom6;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.view.LayoutInflater;
@@ -108,6 +109,13 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
             if (actionListener != null) {
                 actionListener.onShareClick(post);
             }
+        });
+
+        // Khi nhấn vào tên người dùng -> Chuyển tới trang cá nhân
+        holder.tvUserName.setOnClickListener(v -> {
+            Intent intent = new Intent(holder.itemView.getContext(), ProfileActivity.class);
+            intent.putExtra("profile_user_id", post.getUserId());
+            holder.itemView.getContext().startActivity(intent);
         });
 
         holder.itemView.setOnLongClickListener(new View.OnLongClickListener() {
