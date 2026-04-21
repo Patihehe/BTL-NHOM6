@@ -43,6 +43,9 @@ dependencies {
 
     // Glide for image loading
     implementation(libs.glide)
+    
+    // CircleImageView
+    implementation(libs.circleimageview)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

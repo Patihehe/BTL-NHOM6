@@ -42,9 +42,10 @@ public class LoginActivity extends AppCompatActivity {
                     // Kiểm tra đăng nhập trong Room Database
                     User user = db.userDao().login(email, password);
                     if (user != null) {
-                        // LƯU TÊN NGƯỜI DÙNG VÀO SHAREDPREFERENCES
+                        // LƯU THÔNG TIN NGƯỜI DÙNG VÀO SHAREDPREFERENCES
                         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
                         SharedPreferences.Editor editor = pref.edit();
+                        editor.putInt("current_user_id", user.getId());
                         editor.putString("current_user_name", user.getFullName());
                         editor.apply();
 

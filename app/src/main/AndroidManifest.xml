@@ -28,7 +28,12 @@
         <activity
             android:name=".MainActivity"
             android:exported="false" />
-            
+
+        <activity
+            android:name=".ProfileActivity"
+            android:exported="false"
+            android:label="Trang cá nhân" />
+
     </application>
 
 </manifest>

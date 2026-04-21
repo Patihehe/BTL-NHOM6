@@ -26,13 +26,14 @@ public class MainActivity extends AppCompatActivity {
 
     private EditText etPostInput;
     private Button btnPost;
-    private ImageButton btnPickImage, btnClearImage, btnLogout;
+    private ImageButton btnPickImage, btnClearImage, btnLogout, btnGoToProfile;
     private ImageView ivSelectedPreview;
     private RecyclerView recyclerViewPosts;
     private PostAdapter postAdapter;
     private List<Post> postList;
     private AppDatabase db;
     private String currentUserName;
+    private int currentUserId;
     private Uri selectedImageUri = null;
 
     // Bộ chọn ảnh từ thư viện
@@ -61,7 +62,15 @@ public class MainActivity extends AppCompatActivity {
         db = AppDatabase.getInstance(this);
 
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+        currentUserId = pref.getInt("current_user_id", -1);
         currentUserName = pref.getString("current_user_name", "Anonymous");
+
+        if (currentUserId == -1) {
+            Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+            startActivity(intent);
+            finish();
+            return;
+        }
 
         // Khởi tạo View
         etPostInput = findViewById(R.id.etPostInput);
@@ -69,6 +78,7 @@ public class MainActivity extends AppCompatActivity {
         btnPickImage = findViewById(R.id.btnPickImage);
         btnClearImage = findViewById(R.id.btnClearImage);
         btnLogout = findViewById(R.id.btnLogout);
+        btnGoToProfile = findViewById(R.id.btnGoToProfile);
         ivSelectedPreview = findViewById(R.id.ivSelectedPreview);
         recyclerViewPosts = findViewById(R.id.recyclerViewPosts);
 
@@ -95,7 +105,11 @@ public class MainActivity extends AppCompatActivity {
             String content = etPostInput.getText().toString().trim();
             if (!content.isEmpty() || selectedImageUri != null) {
                 String uriString = (selectedImageUri != null) ? selectedImageUri.toString() : "";
-                Post post = new Post(currentUserName, content, uriString, System.currentTimeMillis());
+                // Cập nhật lại userName từ DB phòng trường hợp người dùng vừa đổi tên
+                User user = db.userDao().getUserById(currentUserId);
+                String name = (user != null) ? user.getFullName() : currentUserName;
+                
+                Post post = new Post(currentUserId, name, content, uriString, System.currentTimeMillis());
                 db.postDao().insertPost(post);
                 
                 etPostInput.setText("");
@@ -110,18 +124,22 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // Vào trang cá nhân
+        btnGoToProfile.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, ProfileActivity.class);
+            startActivity(intent);
+        });
+
         // Xử lý Đăng xuất
         btnLogout.setOnClickListener(v -> {
             new AlertDialog.Builder(MainActivity.this)
                     .setTitle("Đăng xuất")
                     .setMessage("Bạn có chắc chắn muốn đăng xuất không?")
                     .setPositiveButton("Đăng xuất", (dialog, which) -> {
-                        // Xóa thông tin người dùng lưu trong SharedPreferences
                         SharedPreferences.Editor editor = pref.edit();
                         editor.clear();
                         editor.apply();
 
-                        // Quay lại màn hình Đăng nhập
                         Intent intent = new Intent(MainActivity.this, LoginActivity.class);
                         startActivity(intent);
                         finish();
@@ -148,5 +166,11 @@ public class MainActivity extends AppCompatActivity {
         postList.clear();
         postList.addAll(db.postDao().getAllPosts());
         postAdapter.notifyDataSetChanged();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadPosts(); // Load lại posts nhỡ có đổi tên hiển thị
     }
 }

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Chỉnh sửa hồ sơ"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp"/>
+
+        <EditText
+            android:id="@+id/etEditName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Tên hiển thị"
+            android:inputType="textPersonName" />
+
+        <EditText
+            android:id="@+id/etEditBio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Tiểu sử"
+            android:inputType="textMultiLine" />
+
+        <EditText
+            android:id="@+id/etEditDob"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Ngày sinh (dd/mm/yyyy)"
+            android:inputType="date" />
+
+        <EditText
+            android:id="@+id/etEditLocation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Nơi ở"
+            android:inputType="textPostalAddress" />
+
+        <Button
+            android:id="@+id/btnChangeAvatar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Thay đổi ảnh đại diện"
+            android:layout_marginTop="8dp"/>
+
+        <Button
+            android:id="@+id/btnChangeCover"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Thay đổi ảnh bìa" />
+
+    </LinearLayout>
+</ScrollView>

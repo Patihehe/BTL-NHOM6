@@ -11,6 +11,11 @@ public class User {
     private String fullName;
     private String email;
     private String password;
+    private String avatarUri;
+    private String coverPhotoUri;
+    private String bio;
+    private String dob;
+    private String location;
 
     public User(String fullName, String email, String password) {
         this.fullName = fullName;
@@ -29,4 +34,19 @@ public class User {
 
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
+
+    public String getAvatarUri() { return avatarUri; }
+    public void setAvatarUri(String avatarUri) { this.avatarUri = avatarUri; }
+
+    public String getCoverPhotoUri() { return coverPhotoUri; }
+    public void setCoverPhotoUri(String coverPhotoUri) { this.coverPhotoUri = coverPhotoUri; }
+
+    public String getBio() { return bio; }
+    public void setBio(String bio) { this.bio = bio; }
+
+    public String getDob() { return dob; }
+    public void setDob(String dob) { this.dob = dob; }
+
+    public String getLocation() { return location; }
+    public void setLocation(String location) { this.location = location; }
 }

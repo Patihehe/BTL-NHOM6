@@ -14,6 +14,9 @@ public interface PostDao {
     @Query("SELECT * FROM posts ORDER BY timestamp DESC")
     List<Post> getAllPosts();
 
+    @Query("SELECT * FROM posts WHERE userId = :userId ORDER BY timestamp DESC")
+    List<Post> getPostsByUserId(int userId);
+
     @Delete
     void deletePost(Post post);
 }

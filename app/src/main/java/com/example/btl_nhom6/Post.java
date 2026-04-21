@@ -8,12 +8,14 @@ public class Post {
     @PrimaryKey(autoGenerate = true)
     private int id;
 
+    private int userId;
     private String userName;
     private String content;
     private String imageUri; // Lưu URI của hình ảnh
     private long timestamp;
 
-    public Post(String userName, String content, String imageUri, long timestamp) {
+    public Post(int userId, String userName, String content, String imageUri, long timestamp) {
+        this.userId = userId;
         this.userName = userName;
         this.content = content;
         this.imageUri = imageUri;
@@ -22,6 +24,9 @@ public class Post {
 
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
+
+    public int getUserId() { return userId; }
+    public void setUserId(int userId) { this.userId = userId; }
 
     public String getUserName() { return userName; }
     public void setUserName(String userName) { this.userName = userName; }
