@@ -1,28 +1,18 @@
 package com.example.btl_nhom6;
 
-import androidx.room.Entity;
-import androidx.room.Index;
-import androidx.room.PrimaryKey;
-
-@Entity(tableName = "likes", 
-        indices = {@Index(value = {"postId", "userId"}, unique = true)})
 public class Like {
-    @PrimaryKey(autoGenerate = true)
-    private int id;
-    private int postId;
-    private int userId;
+    private String postId;
+    private String userId;
 
-    public Like(int postId, int userId) {
+    public Like() {}
+
+    public Like(String postId, String userId) {
         this.postId = postId;
         this.userId = userId;
     }
 
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
-
-    public int getPostId() { return postId; }
-    public void setPostId(int postId) { this.postId = postId; }
-
-    public int getUserId() { return userId; }
-    public void setUserId(int userId) { this.userId = userId; }
+    public String getPostId() { return postId; }
+    public void setPostId(String postId) { this.postId = postId; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
 }

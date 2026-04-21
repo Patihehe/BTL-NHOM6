@@ -13,8 +13,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.tabs.TabLayout;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class SocialActivity extends AppCompatActivity {
 
@@ -25,19 +30,21 @@ public class SocialActivity extends AppCompatActivity {
     private RecyclerView recyclerViewSocial;
     private UserAdapter userAdapter;
     private List<User> displayList = new ArrayList<>();
-    private AppDatabase db;
-    private int currentUserId;
+    private FirebaseFirestore db;
+    private String currentUserId;
+    private String currentUserName;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_social);
 
-        db = AppDatabase.getInstance(this);
+        db = FirebaseFirestore.getInstance();
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
-        currentUserId = pref.getInt("current_user_id", -1);
+        currentUserId = pref.getString("current_user_id", "");
+        currentUserName = pref.getString("current_user_name", "");
 
-        if (currentUserId == -1) {
+        if (currentUserId.isEmpty()) {
             finish();
             return;
         }
@@ -71,7 +78,6 @@ public class SocialActivity extends AppCompatActivity {
             }
         });
 
-        // Initial view
         refreshContent();
     }
 
@@ -89,7 +95,6 @@ public class SocialActivity extends AppCompatActivity {
 
             @Override
             public void onUserClick(User user) {
-                // Mở trang cá nhân của người khác
                 Intent intent = new Intent(SocialActivity.this, ProfileActivity.class);
                 intent.putExtra("profile_user_id", user.getId());
                 startActivity(intent);
@@ -107,62 +112,163 @@ public class SocialActivity extends AppCompatActivity {
             llSearch.setVisibility(View.VISIBLE);
         } else if (position == 1) { // Requests
             llSearch.setVisibility(View.GONE);
-            displayList.addAll(db.friendshipDao().getPendingRequests(currentUserId));
+            loadPendingRequests();
         } else if (position == 2) { // Friends
             llSearch.setVisibility(View.GONE);
-            displayList.addAll(db.friendshipDao().getFriends(currentUserId));
+            loadFriendsList();
         }
         userAdapter.notifyDataSetChanged();
     }
 
     private void searchUsers(String query) {
-        displayList.clear();
-        displayList.addAll(db.friendshipDao().searchUsers(query, currentUserId));
-        userAdapter.notifyDataSetChanged();
-        if (displayList.isEmpty()) {
-            Toast.makeText(this, "Không tìm thấy người dùng", Toast.LENGTH_SHORT).show();
-        }
+        db.collection("users")
+                .orderBy("fullName")
+                .startAt(query)
+                .endAt(query + "\uf8ff")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    displayList.clear();
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        User user = doc.toObject(User.class);
+                        if (!user.getId().equals(currentUserId)) {
+                            displayList.add(user);
+                        }
+                    }
+                    userAdapter.notifyDataSetChanged();
+                    if (displayList.isEmpty()) {
+                        Toast.makeText(this, "Không tìm thấy người dùng", Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+
+    private void loadPendingRequests() {
+        db.collection("friendships")
+                .whereEqualTo("friendId", currentUserId)
+                .whereEqualTo("status", "PENDING")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    displayList.clear();
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        String requesterId = doc.getString("userId");
+                        db.collection("users").document(requesterId).get()
+                                .addOnSuccessListener(userDoc -> {
+                                    if (userDoc.exists()) {
+                                        displayList.add(userDoc.toObject(User.class));
+                                        userAdapter.notifyDataSetChanged();
+                                    }
+                                });
+                    }
+                });
+    }
+
+    private void loadFriendsList() {
+        db.collection("friendships")
+                .whereEqualTo("status", "ACCEPTED")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    displayList.clear();
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        String uid = doc.getString("userId");
+                        String fid = doc.getString("friendId");
+                        String friendId = uid.equals(currentUserId) ? fid : (fid.equals(currentUserId) ? uid : null);
+                        
+                        if (friendId != null) {
+                            db.collection("users").document(friendId).get()
+                                    .addOnSuccessListener(userDoc -> {
+                                        if (userDoc.exists()) {
+                                            User friend = userDoc.toObject(User.class);
+                                            // Tránh add trùng nếu query trả về nhiều kết quả
+                                            boolean exists = false;
+                                            for(User u : displayList) if(u.getId().equals(friend.getId())) exists = true;
+                                            if(!exists) {
+                                                displayList.add(friend);
+                                                userAdapter.notifyDataSetChanged();
+                                            }
+                                        }
+                                    });
+                        }
+                    }
+                });
     }
 
     private void handleUserAction(User user) {
-        Friendship friendship = db.friendshipDao().getFriendship(currentUserId, user.getId());
+        db.collection("friendships")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    String friendshipId = null;
+                    String status = null;
+                    String initiatorId = null;
 
-        if (friendship == null) {
-            // Send request
-            Friendship newRequest = new Friendship(currentUserId, user.getId(), "PENDING");
-            db.friendshipDao().sendFriendRequest(newRequest);
-            Toast.makeText(this, "Đã gửi lời mời kết bạn", Toast.LENGTH_SHORT).show();
-        } else if (friendship.getStatus().equals("PENDING") && friendship.getFriendId() == currentUserId) {
-            // Accept request
-            friendship.setStatus("ACCEPTED");
-            db.friendshipDao().updateFriendshipStatus(friendship);
-            Toast.makeText(this, "Đã chấp nhận lời mời", Toast.LENGTH_SHORT).show();
-        } else if (friendship.getStatus().equals("ACCEPTED")) {
-            // Hủy kết bạn
-            new AlertDialog.Builder(this)
-                    .setTitle("Hủy kết bạn")
-                    .setMessage("Bạn có chắc chắn muốn hủy kết bạn với " + user.getFullName() + "?")
-                    .setPositiveButton("Hủy kết bạn", (dialog, which) -> {
-                        db.friendshipDao().deleteFriendship(friendship);
-                        Toast.makeText(this, "Đã hủy kết bạn", Toast.LENGTH_SHORT).show();
-                        refreshContent();
-                    })
-                    .setNegativeButton("Hủy", null)
-                    .show();
-        }
-        
-        userAdapter.notifyDataSetChanged();
-        if (tabLayout.getSelectedTabPosition() != 0) {
-            refreshContent();
-        }
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        String uid = doc.getString("userId");
+                        String fid = doc.getString("friendId");
+                        if ((uid.equals(currentUserId) && fid.equals(user.getId())) ||
+                            (uid.equals(user.getId()) && fid.equals(currentUserId))) {
+                            friendshipId = doc.getId();
+                            status = doc.getString("status");
+                            initiatorId = uid;
+                            break;
+                        }
+                    }
+
+                    if (status == null) {
+                        // Send request
+                        Map<String, Object> friendship = new HashMap<>();
+                        friendship.put("userId", currentUserId);
+                        friendship.put("friendId", user.getId());
+                        friendship.put("status", "PENDING");
+                        db.collection("friendships").add(friendship)
+                                .addOnSuccessListener(documentReference -> {
+                                    Toast.makeText(this, "Đã gửi lời mời", Toast.LENGTH_SHORT).show();
+                                    refreshContent();
+                                    // Tạo thông báo
+                                    Notification notif = new Notification(user.getEmail(), currentUserName + " đã gửi cho bạn lời mời kết bạn", System.currentTimeMillis());
+                                    db.collection("notifications").add(notif);
+                                });
+                    } else if (status.equals("PENDING")) {
+                        if (!initiatorId.equals(currentUserId)) {
+                            // Accept request
+                            db.collection("friendships").document(friendshipId).update("status", "ACCEPTED")
+                                    .addOnSuccessListener(aVoid -> {
+                                        Toast.makeText(this, "Đã chấp nhận kết bạn", Toast.LENGTH_SHORT).show();
+                                        refreshContent();
+                                        // Thông báo cho người gửi
+                                        Notification notif = new Notification(user.getEmail(), currentUserName + " đã chấp nhận lời mời kết bạn", System.currentTimeMillis());
+                                        db.collection("notifications").add(notif);
+                                    });
+                        }
+                    } else if (status.equals("ACCEPTED")) {
+                        // Unfriend
+                        String finalFriendshipId = friendshipId;
+                        new AlertDialog.Builder(this)
+                                .setTitle("Hủy kết bạn")
+                                .setMessage("Bạn có chắc chắn muốn hủy kết bạn với " + user.getFullName() + "?")
+                                .setPositiveButton("Hủy", (dialog, which) -> {
+                                    db.collection("friendships").document(finalFriendshipId).delete()
+                                            .addOnSuccessListener(aVoid -> {
+                                                Toast.makeText(this, "Đã hủy kết bạn", Toast.LENGTH_SHORT).show();
+                                                refreshContent();
+                                            });
+                                })
+                                .setNegativeButton("Quay lại", null)
+                                .show();
+                    }
+                });
     }
 
     private void handleDeclineAction(User user) {
-        Friendship friendship = db.friendshipDao().getFriendship(currentUserId, user.getId());
-        if (friendship != null && friendship.getStatus().equals("PENDING") && friendship.getFriendId() == currentUserId) {
-            db.friendshipDao().deleteFriendship(friendship);
-            Toast.makeText(this, "Đã từ chối lời mời", Toast.LENGTH_SHORT).show();
-            refreshContent();
-        }
+        db.collection("friendships")
+                .whereEqualTo("friendId", currentUserId)
+                .whereEqualTo("userId", user.getId())
+                .whereEqualTo("status", "PENDING")
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        doc.getReference().delete().addOnSuccessListener(aVoid -> {
+                            Toast.makeText(this, "Đã từ chối lời mời", Toast.LENGTH_SHORT).show();
+                            refreshContent();
+                        });
+                    }
+                });
     }
 }

@@ -1,16 +1,13 @@
 package com.example.btl_nhom6;
 
-import androidx.room.Entity;
-import androidx.room.PrimaryKey;
-
-@Entity(tableName = "messages")
 public class Message {
-    @PrimaryKey(autoGenerate = true)
-    private int id;
+    private String messageId;
     private String senderEmail;
     private String receiverEmail;
     private String content;
     private long timestamp;
+
+    public Message() {}
 
     public Message(String senderEmail, String receiverEmail, String content, long timestamp) {
         this.senderEmail = senderEmail;
@@ -19,8 +16,8 @@ public class Message {
         this.timestamp = timestamp;
     }
 
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
+    public String getMessageId() { return messageId; }
+    public void setMessageId(String messageId) { this.messageId = messageId; }
     public String getSenderEmail() { return senderEmail; }
     public void setSenderEmail(String senderEmail) { this.senderEmail = senderEmail; }
     public String getReceiverEmail() { return receiverEmail; }

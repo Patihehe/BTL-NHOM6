@@ -17,10 +17,16 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,10 +41,10 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     private RecyclerView recyclerViewPosts;
     private PostAdapter postAdapter;
     private List<Post> postList;
-    private AppDatabase db;
+    private FirebaseFirestore db;
     private String currentUserName;
     private String currentUserEmail;
-    private int currentUserId;
+    private String currentUserId; 
     private Uri selectedImageUri = null;
 
     private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
@@ -63,19 +69,20 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        db = AppDatabase.getInstance(this);
+        db = FirebaseFirestore.getInstance();
+        FirebaseAuth mAuth = FirebaseAuth.getInstance();
 
-        SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
-        currentUserId = pref.getInt("current_user_id", -1);
-        currentUserName = pref.getString("current_user_name", "Anonymous");
-        currentUserEmail = pref.getString("current_user_email", "");
-
-        if (currentUserId == -1) {
+        if (mAuth.getCurrentUser() == null) {
             Intent intent = new Intent(MainActivity.this, LoginActivity.class);
             startActivity(intent);
             finish();
             return;
         }
+
+        SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+        currentUserId = mAuth.getCurrentUser().getUid();
+        currentUserName = pref.getString("current_user_name", "Anonymous");
+        currentUserEmail = pref.getString("current_user_email", "");
 
         etPostInput = findViewById(R.id.etPostInput);
         btnPost = findViewById(R.id.btnPost);
@@ -95,8 +102,8 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         recyclerViewPosts.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewPosts.setAdapter(postAdapter);
 
-        loadPosts();
-        updateNotificationBadge();
+        listenForPosts();
+        listenForNotifications();
 
         btnPickImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
         btnClearImage.setOnClickListener(v -> {
@@ -109,19 +116,17 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
             String content = etPostInput.getText().toString().trim();
             if (!content.isEmpty() || selectedImageUri != null) {
                 String uriString = (selectedImageUri != null) ? selectedImageUri.toString() : "";
-                User user = db.userDao().getUserById(currentUserId);
-                String name = (user != null) ? user.getFullName() : currentUserName;
-                
-                Post post = new Post(currentUserId, name, content, uriString, System.currentTimeMillis());
-                db.postDao().insertPost(post);
-                
-                etPostInput.setText("");
-                selectedImageUri = null;
-                ivSelectedPreview.setVisibility(View.GONE);
-                btnClearImage.setVisibility(View.GONE);
-                
-                loadPosts();
-                Toast.makeText(MainActivity.this, "Đã đăng bài!", Toast.LENGTH_SHORT).show();
+                Post post = new Post(currentUserId, currentUserName, content, uriString, System.currentTimeMillis());
+                db.collection("posts").add(post)
+                        .addOnSuccessListener(documentReference -> {
+                            String id = documentReference.getId();
+                            db.collection("posts").document(id).update("postId", id);
+                            etPostInput.setText("");
+                            selectedImageUri = null;
+                            ivSelectedPreview.setVisibility(View.GONE);
+                            btnClearImage.setVisibility(View.GONE);
+                            Toast.makeText(MainActivity.this, "Đã đăng bài!", Toast.LENGTH_SHORT).show();
+                        });
             }
         });
 
@@ -141,6 +146,13 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         });
 
         btnNotifications.setOnClickListener(v -> {
+            // 1. Ẩn Badge ngay lập tức để người dùng thấy hiệu ứng reset tức thì
+            tvNotifBadge.setVisibility(View.GONE);
+            
+            // 2. Cập nhật tất cả thông báo thành "đã đọc" trên Firestore
+            markAllNotificationsAsRead();
+            
+            // 3. Chuyển sang màn hình danh sách thông báo
             Intent intent = new Intent(MainActivity.this, NotificationActivity.class);
             startActivity(intent);
         });
@@ -150,6 +162,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                     .setTitle("Đăng xuất")
                     .setMessage("Bạn có chắc chắn muốn đăng xuất không?")
                     .setPositiveButton("Đăng xuất", (dialog, which) -> {
+                        mAuth.signOut();
                         SharedPreferences.Editor editor = pref.edit();
                         editor.clear();
                         editor.apply();
@@ -162,19 +175,53 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         });
     }
 
-    private void updateNotificationBadge() {
-        List<Notification> notifs = db.notificationDao().getNotificationsForUser(currentUserEmail);
-        int unreadCount = 0;
-        for (Notification n : notifs) {
-            if (!n.isRead()) unreadCount++;
-        }
+    private void markAllNotificationsAsRead() {
+        db.collection("notifications")
+                .whereEqualTo("userEmail", currentUserEmail)
+                .whereEqualTo("isRead", false)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        doc.getReference().update("isRead", true);
+                    }
+                });
+    }
 
-        if (unreadCount > 0) {
-            tvNotifBadge.setText(String.valueOf(unreadCount));
-            tvNotifBadge.setVisibility(View.VISIBLE);
-        } else {
-            tvNotifBadge.setVisibility(View.GONE);
-        }
+    private void listenForPosts() {
+        db.collection("posts")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) return;
+                    postList.clear();
+                    if (value != null) {
+                        for (QueryDocumentSnapshot doc : value) {
+                            postList.add(doc.toObject(Post.class));
+                        }
+                    }
+                    postAdapter.notifyDataSetChanged();
+                });
+    }
+
+    private void listenForNotifications() {
+        db.collection("notifications")
+                .whereEqualTo("userEmail", currentUserEmail)
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) return;
+                    int unreadCount = 0;
+                    if (value != null) {
+                        for (QueryDocumentSnapshot doc : value) {
+                            Notification n = doc.toObject(Notification.class);
+                            if (!n.isRead()) unreadCount++;
+                        }
+                    }
+                    // Cập nhật giao diện nếu có thông báo chưa đọc
+                    if (unreadCount > 0) {
+                        tvNotifBadge.setText(String.valueOf(unreadCount));
+                        tvNotifBadge.setVisibility(View.VISIBLE);
+                    } else {
+                        tvNotifBadge.setVisibility(View.GONE);
+                    }
+                });
     }
 
     private void showDeleteConfirmDialog(Post post) {
@@ -182,25 +229,11 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                 .setTitle("Xóa bài viết")
                 .setMessage("Bạn có chắc chắn muốn xóa bài viết này không?")
                 .setPositiveButton("Xóa", (dialog, which) -> {
-                    db.postDao().deletePost(post);
-                    loadPosts();
+                    db.collection("posts").document(post.getPostId()).delete();
                     Toast.makeText(MainActivity.this, "Đã xóa bài viết", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Hủy", null)
                 .show();
-    }
-
-    private void loadPosts() {
-        postList.clear();
-        postList.addAll(db.postDao().getAllPosts());
-        postAdapter.notifyDataSetChanged();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        loadPosts();
-        updateNotificationBadge();
     }
 
     @Override
@@ -209,34 +242,46 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         RecyclerView rvComments = dialogView.findViewById(R.id.rvComments);
         EditText etCommentInput = dialogView.findViewById(R.id.etCommentInput);
         ImageButton btnSendComment = dialogView.findViewById(R.id.btnSendComment);
-        List<Comment> commentList = db.commentDao().getCommentsByPostId(post.getId());
+
+        List<Comment> commentList = new ArrayList<>();
         CommentAdapter commentAdapter = new CommentAdapter(commentList);
         rvComments.setLayoutManager(new LinearLayoutManager(this));
         rvComments.setAdapter(commentAdapter);
+
+        db.collection("comments")
+                .whereEqualTo("postId", post.getPostId())
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .addSnapshotListener((value, error) -> {
+                    if (value != null) {
+                        commentList.clear();
+                        for (QueryDocumentSnapshot doc : value) {
+                            commentList.add(doc.toObject(Comment.class));
+                        }
+                        commentAdapter.notifyDataSetChanged();
+                        if(!commentList.isEmpty()) rvComments.scrollToPosition(commentList.size()-1);
+                    }
+                });
+
         AlertDialog dialog = new AlertDialog.Builder(this).setView(dialogView).create();
+
         btnSendComment.setOnClickListener(v -> {
             String content = etCommentInput.getText().toString().trim();
             if (!content.isEmpty()) {
-                User user = db.userDao().getUserById(currentUserId);
-                Comment comment = new Comment(post.getId(), currentUserId, user.getFullName(), content, System.currentTimeMillis());
-                db.commentDao().insertComment(comment);
-                
-                // TẠO THÔNG BÁO COMMENT
-                if (post.getUserId() != currentUserId) {
-                    User postOwner = db.userDao().getUserById(post.getUserId());
-                    if (postOwner != null) {
-                        String notifContent = user.getFullName() + " đã bình luận về bài viết của bạn: \"" + content + "\"";
-                        Notification notif = new Notification(postOwner.getEmail(), notifContent, System.currentTimeMillis());
-                        db.notificationDao().insertNotification(notif);
+                Comment comment = new Comment(post.getPostId(), currentUserId, currentUserName, content, System.currentTimeMillis());
+                db.collection("comments").add(comment).addOnSuccessListener(doc -> {
+                    doc.update("commentId", doc.getId());
+                    etCommentInput.setText("");
+                    
+                    if (!post.getUserId().equals(currentUserId)) {
+                        db.collection("users").document(post.getUserId()).get().addOnSuccessListener(userDoc -> {
+                            String ownerEmail = userDoc.getString("email");
+                            if (ownerEmail != null) {
+                                Notification notif = new Notification(ownerEmail, currentUserName + " đã bình luận bài viết của bạn", System.currentTimeMillis());
+                                db.collection("notifications").add(notif);
+                            }
+                        });
                     }
-                }
-
-                etCommentInput.setText("");
-                commentList.clear();
-                commentList.addAll(db.commentDao().getCommentsByPostId(post.getId()));
-                commentAdapter.notifyDataSetChanged();
-                rvComments.scrollToPosition(commentList.size() - 1);
-                postAdapter.notifyDataSetChanged();
+                });
             }
         });
         dialog.show();
@@ -246,25 +291,24 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     public void onShareClick(Post post) {
         new AlertDialog.Builder(this)
                 .setTitle("Chia sẻ")
-                .setMessage("Bạn có muốn chia sẻ bài viết này lên tường của mình không?")
+                .setMessage("Bạn có muốn chia sẻ bài viết này?")
                 .setPositiveButton("Chia sẻ", (dialog, which) -> {
-                    User user = db.userDao().getUserById(currentUserId);
                     String sharedContent = "[Shared from " + post.getUserName() + "]: " + post.getContent();
-                    Post sharedPost = new Post(currentUserId, user.getFullName(), sharedContent, post.getImageUri(), System.currentTimeMillis());
-                    db.postDao().insertPost(sharedPost);
-                    
-                    // TẠO THÔNG BÁO SHARE
-                    if (post.getUserId() != currentUserId) {
-                        User postOwner = db.userDao().getUserById(post.getUserId());
-                        if (postOwner != null) {
-                            String notifContent = user.getFullName() + " đã chia sẻ bài viết của bạn.";
-                            Notification notif = new Notification(postOwner.getEmail(), notifContent, System.currentTimeMillis());
-                            db.notificationDao().insertNotification(notif);
+                    Post sharedPost = new Post(currentUserId, currentUserName, sharedContent, post.getImageUri(), System.currentTimeMillis());
+                    db.collection("posts").add(sharedPost).addOnSuccessListener(doc -> {
+                        doc.update("postId", doc.getId());
+                        Toast.makeText(this, "Đã chia sẻ!", Toast.LENGTH_SHORT).show();
+                        
+                        if (!post.getUserId().equals(currentUserId)) {
+                            db.collection("users").document(post.getUserId()).get().addOnSuccessListener(userDoc -> {
+                                String ownerEmail = userDoc.getString("email");
+                                if (ownerEmail != null) {
+                                    Notification notif = new Notification(ownerEmail, currentUserName + " đã chia sẻ bài viết của bạn", System.currentTimeMillis());
+                                    db.collection("notifications").add(notif);
+                                }
+                            });
                         }
-                    }
-
-                    loadPosts();
-                    Toast.makeText(MainActivity.this, "Đã chia sẻ lên tường cá nhân", Toast.LENGTH_SHORT).show();
+                    });
                 })
                 .setNegativeButton("Hủy", null)
                 .show();

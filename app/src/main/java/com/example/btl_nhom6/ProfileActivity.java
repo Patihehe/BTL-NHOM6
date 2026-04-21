@@ -22,6 +22,9 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,10 +37,10 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
     private RecyclerView rvUserPosts;
     private PostAdapter postAdapter;
     private List<Post> userPostList;
-    private AppDatabase db;
+    private FirebaseFirestore db; // Chuyển sang Firestore
     private User profileUser;
-    private int profileUserId;
-    private int currentUserId;
+    private String profileUserId;
+    private String currentUserId;
 
     private boolean isChangingAvatar = false;
 
@@ -57,7 +60,7 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
                         profileUser.setCoverPhotoUri(uri.toString());
                         Glide.with(this).load(uri).into(ivCover);
                     }
-                    db.userDao().updateUser(profileUser);
+                    db.collection("users").document(profileUserId).set(profileUser);
                 }
             }
     );
@@ -67,18 +70,19 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_profile);
 
-        db = AppDatabase.getInstance(this);
+        db = FirebaseFirestore.getInstance();
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
-        currentUserId = pref.getInt("current_user_id", -1);
+        currentUserId = pref.getString("current_user_id", "");
 
-        profileUserId = getIntent().getIntExtra("profile_user_id", currentUserId);
+        profileUserId = getIntent().getStringExtra("profile_user_id");
+        if (profileUserId == null || profileUserId.isEmpty()) {
+            profileUserId = currentUserId;
+        }
 
-        if (profileUserId == -1) {
+        if (profileUserId.isEmpty()) {
             finish();
             return;
         }
-
-        profileUser = db.userDao().getUserById(profileUserId);
 
         ivCover = findViewById(R.id.ivCover);
         ivAvatar = findViewById(R.id.ivAvatar);
@@ -90,22 +94,14 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         btnChat = findViewById(R.id.btnChat);
         rvUserPosts = findViewById(R.id.rvUserPosts);
 
-        displayUserInfo();
-
-        if (profileUserId != currentUserId) {
-            btnEditProfile.setVisibility(View.GONE);
-            btnChat.setVisibility(View.VISIBLE);
-        }
-
         userPostList = new ArrayList<>();
         postAdapter = new PostAdapter(userPostList, post -> {
-            if (profileUserId == currentUserId) {
+            if (profileUserId.equals(currentUserId)) {
                 new AlertDialog.Builder(this)
                         .setTitle("Xóa bài viết")
                         .setMessage("Bạn có chắc chắn muốn xóa bài viết này không?")
                         .setPositiveButton("Xóa", (dialog, which) -> {
-                            db.postDao().deletePost(post);
-                            loadUserPosts();
+                            db.collection("posts").document(post.getPostId()).delete();
                         })
                         .setNegativeButton("Hủy", null)
                         .show();
@@ -114,6 +110,7 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         rvUserPosts.setLayoutManager(new LinearLayoutManager(this));
         rvUserPosts.setAdapter(postAdapter);
 
+        loadProfileData();
         loadUserPosts();
 
         btnEditProfile.setOnClickListener(v -> showEditProfileDialog());
@@ -126,26 +123,53 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         });
     }
 
+    private void loadProfileData() {
+        db.collection("users").document(profileUserId).addSnapshotListener((value, error) -> {
+            if (value != null && value.exists()) {
+                profileUser = value.toObject(User.class);
+                displayUserInfo();
+                
+                if (!profileUserId.equals(currentUserId)) {
+                    btnEditProfile.setVisibility(View.GONE);
+                    btnChat.setVisibility(View.VISIBLE);
+                } else {
+                    btnEditProfile.setVisibility(View.VISIBLE);
+                    btnChat.setVisibility(View.GONE);
+                }
+            }
+        });
+    }
+
     private void displayUserInfo() {
+        if (profileUser == null) return;
         tvFullName.setText(profileUser.getFullName());
         tvBio.setText(profileUser.getBio() != null && !profileUser.getBio().isEmpty() ? profileUser.getBio() : "Chưa có tiểu sử");
         tvLocation.setText("Sống tại " + (profileUser.getLocation() != null && !profileUser.getLocation().isEmpty() ? profileUser.getLocation() : "..."));
         tvDob.setText("Ngày sinh: " + (profileUser.getDob() != null && !profileUser.getDob().isEmpty() ? profileUser.getDob() : "..."));
 
-        if (profileUser.getAvatarUri() != null) {
+        if (profileUser.getAvatarUri() != null && !profileUser.getAvatarUri().isEmpty()) {
             Glide.with(this).load(Uri.parse(profileUser.getAvatarUri())).into(ivAvatar);
         } else {
             ivAvatar.setImageResource(android.R.drawable.ic_menu_report_image);
         }
-        if (profileUser.getCoverPhotoUri() != null) {
+        if (profileUser.getCoverPhotoUri() != null && !profileUser.getCoverPhotoUri().isEmpty()) {
             Glide.with(this).load(Uri.parse(profileUser.getCoverPhotoUri())).into(ivCover);
         }
     }
 
     private void loadUserPosts() {
-        userPostList.clear();
-        userPostList.addAll(db.postDao().getPostsByUserId(profileUserId));
-        postAdapter.notifyDataSetChanged();
+        db.collection("posts")
+                .whereEqualTo("userId", profileUserId)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .addSnapshotListener((value, error) -> {
+                    if (value != null) {
+                        userPostList.clear();
+                        for (QueryDocumentSnapshot doc : value) {
+                            userPostList.add(doc.toObject(Post.class));
+                        }
+                        postAdapter.notifyDataSetChanged();
+                    }
+                });
     }
 
     private void showEditProfileDialog() {
@@ -171,8 +195,7 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
             profileUser.setDob(etEditDob.getText().toString());
             profileUser.setLocation(etEditLocation.getText().toString());
 
-            db.userDao().updateUser(profileUser);
-            displayUserInfo();
+            db.collection("users").document(profileUserId).set(profileUser);
             Toast.makeText(this, "Đã cập nhật hồ sơ", Toast.LENGTH_SHORT).show();
         });
 
@@ -195,53 +218,11 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
 
     @Override
     public void onCommentClick(Post post) {
-        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_comments, null);
-        RecyclerView rvComments = dialogView.findViewById(R.id.rvComments);
-        EditText etCommentInput = dialogView.findViewById(R.id.etCommentInput);
-        ImageButton btnSendComment = dialogView.findViewById(R.id.btnSendComment);
-
-        List<Comment> commentList = db.commentDao().getCommentsByPostId(post.getId());
-        CommentAdapter commentAdapter = new CommentAdapter(commentList);
-        rvComments.setLayoutManager(new LinearLayoutManager(this));
-        rvComments.setAdapter(commentAdapter);
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setView(dialogView)
-                .create();
-
-        btnSendComment.setOnClickListener(v -> {
-            String content = etCommentInput.getText().toString().trim();
-            if (!content.isEmpty()) {
-                User user = db.userDao().getUserById(currentUserId);
-                Comment comment = new Comment(post.getId(), currentUserId, user.getFullName(), content, System.currentTimeMillis());
-                db.commentDao().insertComment(comment);
-                
-                etCommentInput.setText("");
-                commentList.clear();
-                commentList.addAll(db.commentDao().getCommentsByPostId(post.getId()));
-                commentAdapter.notifyDataSetChanged();
-                rvComments.scrollToPosition(commentList.size() - 1);
-                
-                postAdapter.notifyDataSetChanged();
-            }
-        });
-
-        dialog.show();
+        // Logic comment Firestore
     }
 
     @Override
     public void onShareClick(Post post) {
-        new AlertDialog.Builder(this)
-                .setTitle("Chia sẻ")
-                .setMessage("Bạn có muốn chia sẻ bài viết này lên tường của mình không?")
-                .setPositiveButton("Chia sẻ", (dialog, which) -> {
-                    User user = db.userDao().getUserById(currentUserId);
-                    String sharedContent = "[Shared from " + post.getUserName() + "]: " + post.getContent();
-                    Post sharedPost = new Post(currentUserId, user.getFullName(), sharedContent, post.getImageUri(), System.currentTimeMillis());
-                    db.postDao().insertPost(sharedPost);
-                    Toast.makeText(this, "Đã chia sẻ lên tường cá nhân", Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("Hủy", null)
-                .show();
+        // Logic share Firestore
     }
 }

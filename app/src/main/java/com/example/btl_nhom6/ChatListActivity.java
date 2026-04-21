@@ -10,8 +10,14 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
+
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class ChatListActivity extends AppCompatActivity {
 
@@ -19,7 +25,7 @@ public class ChatListActivity extends AppCompatActivity {
     private TextView tvNoChats;
     private RecentChatAdapter adapter;
     private List<User> chatUsers;
-    private AppDatabase db;
+    private FirebaseFirestore db;
     private String currentUserEmail;
 
     @Override
@@ -27,7 +33,7 @@ public class ChatListActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat_list);
 
-        db = AppDatabase.getInstance(this);
+        db = FirebaseFirestore.getInstance();
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         currentUserEmail = pref.getString("current_user_email", "");
 
@@ -49,29 +55,42 @@ public class ChatListActivity extends AppCompatActivity {
     }
 
     private void loadRecentChats() {
-        chatUsers.clear();
-        // Lấy danh sách email những người đã nhắn tin
-        List<String> emails = db.messageDao().getRecentChatUsers(currentUserEmail);
-        
-        for (String email : emails) {
-            User user = db.userDao().getUserByEmail(email);
-            if (user != null) {
-                chatUsers.add(user);
-            }
-        }
-
-        adapter.notifyDataSetChanged();
-
-        if (chatUsers.isEmpty()) {
-            tvNoChats.setVisibility(View.VISIBLE);
-        } else {
-            tvNoChats.setVisibility(View.GONE);
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        loadRecentChats();
+        // Lấy toàn bộ tin nhắn liên quan đến người dùng hiện tại để tìm danh sách người đã chat
+        db.collection("messages")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) return;
+                    if (value != null) {
+                        Set<String> emails = new HashSet<>();
+                        for (QueryDocumentSnapshot doc : value) {
+                            Message msg = doc.toObject(Message.class);
+                            if (msg.getSenderEmail().equals(currentUserEmail)) {
+                                emails.add(msg.getReceiverEmail());
+                            } else if (msg.getReceiverEmail().equals(currentUserEmail)) {
+                                emails.add(msg.getSenderEmail());
+                            }
+                        }
+                        
+                        chatUsers.clear();
+                        if (emails.isEmpty()) {
+                            tvNoChats.setVisibility(View.VISIBLE);
+                            adapter.notifyDataSetChanged();
+                        } else {
+                            tvNoChats.setVisibility(View.GONE);
+                            // Query thông tin từng user từ email
+                            for (String email : emails) {
+                                db.collection("users")
+                                        .whereEqualTo("email", email)
+                                        .get()
+                                        .addOnSuccessListener(queryDocumentSnapshots -> {
+                                            for (QueryDocumentSnapshot userDoc : queryDocumentSnapshots) {
+                                                chatUsers.add(userDoc.toObject(User.class));
+                                            }
+                                            adapter.notifyDataSetChanged();
+                                        });
+                            }
+                        }
+                    }
+                });
     }
 }

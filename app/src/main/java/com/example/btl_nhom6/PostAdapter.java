@@ -12,6 +12,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -22,8 +24,8 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
     private List<Post> postList;
     private OnPostLongClickListener longClickListener;
     private OnPostActionListener actionListener;
-    private AppDatabase db;
-    private int currentUserId;
+    private FirebaseFirestore db;
+    private String currentUserId;
     private String currentUserName;
 
     public interface OnPostLongClickListener {
@@ -39,14 +41,14 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         this.postList = postList;
         this.longClickListener = longClickListener;
         this.actionListener = actionListener;
+        this.db = FirebaseFirestore.getInstance();
     }
 
     @NonNull
     @Override
     public PostViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        db = AppDatabase.getInstance(parent.getContext());
         SharedPreferences pref = parent.getContext().getSharedPreferences("AppPrefs", Context.MODE_PRIVATE);
-        currentUserId = pref.getInt("current_user_id", -1);
+        currentUserId = pref.getString("current_user_id", "");
         currentUserName = pref.getString("current_user_name", "Ai đó");
         
         View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_post, parent, false);
@@ -71,38 +73,70 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
             holder.ivPostImage.setVisibility(View.GONE);
         }
 
-        int likeCount = db.likeDao().getLikeCount(post.getId());
-        int commentCount = db.commentDao().getCommentCount(post.getId());
-        holder.tvLikeCount.setText(likeCount + " Lượt thích");
-        holder.tvCommentCount.setText(commentCount + " Bình luận");
-
-        Like userLike = db.likeDao().getLike(post.getId(), currentUserId);
-        if (userLike != null) {
-            holder.btnLike.setTextColor(Color.parseColor("#1877F2"));
-            holder.btnLike.setText("Đã thích");
-        } else {
-            holder.btnLike.setTextColor(Color.parseColor("#606770"));
-            holder.btnLike.setText("Thích");
-        }
-
-        holder.btnLike.setOnClickListener(v -> {
-            if (userLike != null) {
-                db.likeDao().deleteLike(post.getId(), currentUserId);
-            } else {
-                db.likeDao().insertLike(new Like(post.getId(), currentUserId));
-                
-                // TẠO THÔNG BÁO KHI LIKE
-                if (post.getUserId() != currentUserId) {
-                    User postOwner = db.userDao().getUserById(post.getUserId());
-                    if (postOwner != null) {
-                        String content = currentUserName + " đã thích bài viết của bạn: \"" + truncate(post.getContent(), 20) + "\"";
-                        Notification notif = new Notification(postOwner.getEmail(), content, System.currentTimeMillis());
-                        db.notificationDao().insertNotification(notif);
+        // Lấy số lượng Like Realtime từ Firestore
+        db.collection("likes")
+                .whereEqualTo("postId", post.getPostId())
+                .addSnapshotListener((value, error) -> {
+                    if (value != null) {
+                        int count = value.size();
+                        holder.tvLikeCount.setText(count + " Lượt thích");
+                        
+                        // Kiểm tra xem user hiện tại đã like chưa
+                        boolean isLiked = false;
+                        for (com.google.firebase.firestore.DocumentSnapshot doc : value) {
+                            if (currentUserId.equals(doc.getString("userId"))) {
+                                isLiked = true;
+                                break;
+                            }
+                        }
+                        
+                        if (isLiked) {
+                            holder.btnLike.setTextColor(Color.parseColor("#1877F2"));
+                            holder.btnLike.setText("Đã thích");
+                            holder.btnLike.setOnClickListener(v -> {
+                                // Bỏ like
+                                db.collection("likes")
+                                        .whereEqualTo("postId", post.getPostId())
+                                        .whereEqualTo("userId", currentUserId)
+                                        .get()
+                                        .addOnSuccessListener(queryDocumentSnapshots -> {
+                                            for (com.google.firebase.firestore.DocumentSnapshot doc : queryDocumentSnapshots) {
+                                                doc.getReference().delete();
+                                            }
+                                        });
+                            });
+                        } else {
+                            holder.btnLike.setTextColor(Color.parseColor("#606770"));
+                            holder.btnLike.setText("Thích");
+                            holder.btnLike.setOnClickListener(v -> {
+                                // Thêm like
+                                Like like = new Like(post.getPostId(), currentUserId);
+                                db.collection("likes").add(like);
+                                
+                                // Tạo thông báo
+                                if (!post.getUserId().equals(currentUserId)) {
+                                    db.collection("users").document(post.getUserId()).get()
+                                            .addOnSuccessListener(userDoc -> {
+                                                String email = userDoc.getString("email");
+                                                if (email != null) {
+                                                    Notification notif = new Notification(email, currentUserName + " đã thích bài viết của bạn", System.currentTimeMillis());
+                                                    db.collection("notifications").add(notif);
+                                                }
+                                            });
+                                }
+                            });
+                        }
                     }
-                }
-            }
-            notifyItemChanged(position);
-        });
+                });
+
+        // Lấy số lượng Comment Realtime
+        db.collection("comments")
+                .whereEqualTo("postId", post.getPostId())
+                .addSnapshotListener((value, error) -> {
+                    if (value != null) {
+                        holder.tvCommentCount.setText(value.size() + " Bình luận");
+                    }
+                });
 
         holder.btnComment.setOnClickListener(v -> {
             if (actionListener != null) {
@@ -128,12 +162,6 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
             }
             return true;
         });
-    }
-
-    private String truncate(String text, int length) {
-        if (text == null) return "";
-        if (text.length() <= length) return text;
-        return text.substring(0, length) + "...";
     }
 
     @Override

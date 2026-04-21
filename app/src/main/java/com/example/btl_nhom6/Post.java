@@ -1,20 +1,17 @@
 package com.example.btl_nhom6;
 
-import androidx.room.Entity;
-import androidx.room.PrimaryKey;
-
-@Entity(tableName = "posts")
 public class Post {
-    @PrimaryKey(autoGenerate = true)
-    private int id;
-
-    private int userId;
+    private String postId; // ID từ Firebase
+    private String userId;
     private String userName;
     private String content;
-    private String imageUri; // Lưu URI của hình ảnh
+    private String imageUri;
     private long timestamp;
 
-    public Post(int userId, String userName, String content, String imageUri, long timestamp) {
+    // Cần constructor rỗng cho Firebase
+    public Post() {}
+
+    public Post(String userId, String userName, String content, String imageUri, long timestamp) {
         this.userId = userId;
         this.userName = userName;
         this.content = content;
@@ -22,11 +19,11 @@ public class Post {
         this.timestamp = timestamp;
     }
 
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
+    public String getPostId() { return postId; }
+    public void setPostId(String postId) { this.postId = postId; }
 
-    public int getUserId() { return userId; }
-    public void setUserId(int userId) { this.userId = userId; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
 
     public String getUserName() { return userName; }
     public void setUserName(String userName) { this.userName = userName; }

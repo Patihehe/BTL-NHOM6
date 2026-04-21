@@ -5,19 +5,21 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
-import de.hdodenhof.circleimageview.CircleImageView;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 import java.util.List;
 
 public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder> {
 
     private List<User> userList;
     private OnUserActionListener actionListener;
-    private int currentUserId;
-    private AppDatabase db;
+    private String currentUserId;
+    private FirebaseFirestore db; // Đổi từ AppDatabase sang FirebaseFirestore
 
     public interface OnUserActionListener {
         void onAction(User user);
@@ -25,7 +27,7 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
         void onUserClick(User user);
     }
 
-    public UserAdapter(List<User> userList, int currentUserId, AppDatabase db, OnUserActionListener actionListener) {
+    public UserAdapter(List<User> userList, String currentUserId, FirebaseFirestore db, OnUserActionListener actionListener) {
         this.userList = userList;
         this.currentUserId = currentUserId;
         this.db = db;
@@ -51,24 +53,38 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
             holder.ivUserAvatar.setImageResource(android.R.drawable.ic_menu_report_image);
         }
 
-        // Determine relationship status and update button
-        Friendship friendship = db.friendshipDao().getFriendship(currentUserId, user.getId());
-
+        // Logic kiểm tra trạng thái bạn bè trên Firebase
+        holder.btnAction.setText("Thêm bạn");
         holder.btnDecline.setVisibility(View.GONE);
         holder.btnAction.setEnabled(true);
-        if (friendship == null) {
-            holder.btnAction.setText("Thêm bạn");
-        } else if (friendship.getStatus().equals("PENDING")) {
-            if (friendship.getUserId() == currentUserId) {
-                holder.btnAction.setText("Đã gửi");
-                holder.btnAction.setEnabled(false);
-            } else {
-                holder.btnAction.setText("Chấp nhận");
-                holder.btnDecline.setVisibility(View.VISIBLE);
-            }
-        } else if (friendship.getStatus().equals("ACCEPTED")) {
-            holder.btnAction.setText("Hủy kết bạn");
-        }
+
+        db.collection("friendships")
+                .whereIn("userId", java.util.Arrays.asList(currentUserId, user.getId()))
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        String uid = doc.getString("userId");
+                        String fid = doc.getString("friendId");
+                        String status = doc.getString("status");
+
+                        if ((uid.equals(currentUserId) && fid.equals(user.getId())) ||
+                            (uid.equals(user.getId()) && fid.equals(currentUserId))) {
+                            
+                            if (status.equals("PENDING")) {
+                                if (uid.equals(currentUserId)) {
+                                    holder.btnAction.setText("Đã gửi");
+                                    holder.btnAction.setEnabled(false);
+                                } else {
+                                    holder.btnAction.setText("Chấp nhận");
+                                    holder.btnDecline.setVisibility(View.VISIBLE);
+                                }
+                            } else if (status.equals("ACCEPTED")) {
+                                holder.btnAction.setText("Hủy kết bạn");
+                            }
+                            break;
+                        }
+                    }
+                });
 
         holder.btnAction.setOnClickListener(v -> actionListener.onAction(user));
         holder.btnDecline.setOnClickListener(v -> actionListener.onDecline(user));
@@ -81,7 +97,7 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
     }
 
     static class UserViewHolder extends RecyclerView.ViewHolder {
-        CircleImageView ivUserAvatar;
+        ImageView ivUserAvatar;
         TextView tvUserName, tvUserEmail;
         Button btnAction;
         ImageButton btnDecline;

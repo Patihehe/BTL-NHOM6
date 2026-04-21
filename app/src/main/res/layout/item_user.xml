@@ -14,13 +14,12 @@
         android:padding="8dp"
         android:gravity="center_vertical">
 
-        <de.hdodenhof.circleimageview.CircleImageView
+        <ImageView
             android:id="@+id/ivUserAvatar"
             android:layout_width="50dp"
             android:layout_height="50dp"
             android:src="@android:drawable/ic_menu_report_image"
-            app:civ_border_width="1dp"
-            app:civ_border_color="#DDDDDD"/>
+            android:background="@android:color/darker_gray" />
 
         <LinearLayout
             android:layout_width="0dp"

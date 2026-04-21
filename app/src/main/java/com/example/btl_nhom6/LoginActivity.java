@@ -3,7 +3,6 @@ package com.example.btl_nhom6;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -11,64 +10,78 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.FirebaseFirestore;
+
 public class LoginActivity extends AppCompatActivity {
 
     private EditText etEmail, etPassword;
     private Button btnLogin;
     private TextView tvRegister;
-    private AppDatabase db;
+    
+    private FirebaseAuth mAuth;
+    private FirebaseFirestore db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
 
-        db = AppDatabase.getInstance(this);
+        mAuth = FirebaseAuth.getInstance();
+        db = FirebaseFirestore.getInstance();
 
         etEmail = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
         btnLogin = findViewById(R.id.btnLogin);
         tvRegister = findViewById(R.id.tvRegister);
 
-        btnLogin.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String email = etEmail.getText().toString().trim();
-                String password = etPassword.getText().toString().trim();
+        btnLogin.setOnClickListener(v -> {
+            String email = etEmail.getText().toString().trim();
+            String password = etPassword.getText().toString().trim();
 
-                if (email.isEmpty() || password.isEmpty()) {
-                    Toast.makeText(LoginActivity.this, "Vui lòng nhập đầy đủ thông tin", Toast.LENGTH_SHORT).show();
-                } else {
-                    // Kiểm tra đăng nhập trong Room Database
-                    User user = db.userDao().login(email, password);
-                    if (user != null) {
-                        // LƯU THÔNG TIN NGƯỜI DÙNG VÀO SHAREDPREFERENCES
-                        SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
-                        SharedPreferences.Editor editor = pref.edit();
-                        editor.putInt("current_user_id", user.getId()); // QUAN TRỌNG: Lưu ID
-                        editor.putString("current_user_name", user.getFullName());
-                        editor.putString("current_user_email", user.getEmail());
-                        editor.apply();
+            if (email.isEmpty() || password.isEmpty()) {
+                Toast.makeText(LoginActivity.this, "Vui lòng nhập đầy đủ thông tin", Toast.LENGTH_SHORT).show();
+            } else {
+                loginUser(email, password);
+            }
+        });
 
-                        Toast.makeText(LoginActivity.this, "Đăng nhập thành công! Chào " + user.getFullName(), Toast.LENGTH_SHORT).show();
+        tvRegister.setOnClickListener(v -> {
+            Intent intent = new Intent(LoginActivity.this, RegisterActivity.class);
+            startActivity(intent);
+        });
+    }
+
+    private void loginUser(String email, String password) {
+        mAuth.signInWithEmailAndPassword(email, password)
+                .addOnCompleteListener(this, task -> {
+                    if (task.isSuccessful()) {
+                        String userId = mAuth.getCurrentUser().getUid();
                         
-                        // Chuyển sang màn hình chính
-                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                        startActivity(intent);
-                        finish();
-                    } else {
-                        Toast.makeText(LoginActivity.this, "Email hoặc mật khẩu không chính xác", Toast.LENGTH_SHORT).show();
-                    }
-                }
-            }
-        });
+                        // Lấy thêm thông tin từ Firestore
+                        db.collection("users").document(userId).get()
+                                .addOnSuccessListener(documentSnapshot -> {
+                                    if (documentSnapshot.exists()) {
+                                        String fullName = documentSnapshot.getString("fullName");
+                                        
+                                        // Lưu vào SharedPreferences để dùng nhanh (vẫn giữ thói quen cũ)
+                                        SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+                                        SharedPreferences.Editor editor = pref.edit();
+                                        editor.putString("current_user_id", userId);
+                                        editor.putString("current_user_name", fullName);
+                                        editor.putString("current_user_email", email);
+                                        editor.apply();
 
-        tvRegister.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent(LoginActivity.this, RegisterActivity.class);
-                startActivity(intent);
-            }
-        });
+                                        Toast.makeText(LoginActivity.this, "Đăng nhập thành công!", Toast.LENGTH_SHORT).show();
+                                        
+                                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                                        startActivity(intent);
+                                        finish();
+                                    }
+                                });
+                    } else {
+                        Toast.makeText(LoginActivity.this, "Đăng nhập thất bại: " + task.getException().getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
     }
 }

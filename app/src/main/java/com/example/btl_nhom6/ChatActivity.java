@@ -4,13 +4,23 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.Toast;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.firebase.firestore.DocumentChange;
+import com.google.firebase.firestore.EventListener;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QuerySnapshot;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class ChatActivity extends AppCompatActivity {
@@ -20,7 +30,7 @@ public class ChatActivity extends AppCompatActivity {
     private ImageButton btnSendMessage;
     private ChatAdapter chatAdapter;
     private List<Message> messageList;
-    private AppDatabase db;
+    private FirebaseFirestore db; // Chuyển sang FirebaseFirestore
     private String currentUserEmail;
     private String receiverEmail;
 
@@ -29,14 +39,11 @@ public class ChatActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
 
-        db = AppDatabase.getInstance(this);
+        db = FirebaseFirestore.getInstance();
 
-        // Lấy email người dùng hiện tại
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
-        // Lưu ý: Bạn cần đảm bảo đã lưu email vào AppPrefs lúc đăng nhập
         currentUserEmail = pref.getString("current_user_email", ""); 
 
-        // Lấy email người nhận từ Intent
         receiverEmail = getIntent().getStringExtra("receiver_email");
         String receiverName = getIntent().getStringExtra("receiver_name");
 
@@ -53,23 +60,52 @@ public class ChatActivity extends AppCompatActivity {
         rvChatHistory.setLayoutManager(new LinearLayoutManager(this));
         rvChatHistory.setAdapter(chatAdapter);
 
-        loadChatHistory();
+        listenForMessages(); // Lắng nghe tin nhắn Realtime từ Firebase
 
         btnSendMessage.setOnClickListener(v -> {
             String content = etMessageInput.getText().toString().trim();
             if (!content.isEmpty()) {
                 Message message = new Message(currentUserEmail, receiverEmail, content, System.currentTimeMillis());
-                db.messageDao().sendMessage(message);
-                etMessageInput.setText("");
-                loadChatHistory();
-                rvChatHistory.scrollToPosition(messageList.size() - 1);
+                
+                // Gửi tin nhắn lên collection "messages"
+                db.collection("messages").add(message)
+                        .addOnSuccessListener(documentReference -> {
+                            String id = documentReference.getId();
+                            db.collection("messages").document(id).update("messageId", id);
+                            etMessageInput.setText("");
+                        })
+                        .addOnFailureListener(e -> {
+                            Toast.makeText(ChatActivity.this, "Lỗi gửi tin nhắn", Toast.LENGTH_SHORT).show();
+                        });
             }
         });
     }
 
-    private void loadChatHistory() {
-        messageList.clear();
-        messageList.addAll(db.messageDao().getChatHistory(currentUserEmail, receiverEmail));
-        chatAdapter.notifyDataSetChanged();
+    private void listenForMessages() {
+        // Truy vấn lấy tin nhắn giữa 2 người (sender=A & receiver=B) HOẶC (sender=B & receiver=A)
+        // Lưu ý: Firestore không hỗ trợ truy vấn OR phức tạp kiểu này trực tiếp một cách dễ dàng với OrderBy.
+        // Cách đơn giản nhất là lắng nghe tất cả tin nhắn liên quan đến bạn và lọc ở Client hoặc dùng một ChatRoom ID.
+        // Ở đây để đơn giản, ta lắng nghe tất cả tin nhắn và lọc:
+        
+        db.collection("messages")
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) return;
+                    if (value != null) {
+                        messageList.clear();
+                        for (com.google.firebase.firestore.QueryDocumentSnapshot doc : value) {
+                            Message msg = doc.toObject(Message.class);
+                            // Lọc tin nhắn chỉ giữa 2 người này
+                            if ((msg.getSenderEmail().equals(currentUserEmail) && msg.getReceiverEmail().equals(receiverEmail)) ||
+                                (msg.getSenderEmail().equals(receiverEmail) && msg.getReceiverEmail().equals(currentUserEmail))) {
+                                messageList.add(msg);
+                            }
+                        }
+                        chatAdapter.notifyDataSetChanged();
+                        if (!messageList.isEmpty()) {
+                            rvChatHistory.scrollToPosition(messageList.size() - 1);
+                        }
+                    }
+                });
     }
 }
