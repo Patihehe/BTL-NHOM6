@@ -1,10 +1,12 @@
 package com.example.btl_nhom6;
 
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -22,7 +24,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements PostAdapter.OnPostActionListener {
 
     private EditText etPostInput;
     private Button btnPost;
@@ -84,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Thiết lập RecyclerView
         postList = new ArrayList<>();
-        postAdapter = new PostAdapter(postList, this::showDeleteConfirmDialog);
+        postAdapter = new PostAdapter(postList, this::showDeleteConfirmDialog, this);
         recyclerViewPosts.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewPosts.setAdapter(postAdapter);
 
@@ -172,5 +174,58 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         loadPosts(); // Load lại posts nhỡ có đổi tên hiển thị
+    }
+
+    @Override
+    public void onCommentClick(Post post) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_comments, null);
+        RecyclerView rvComments = dialogView.findViewById(R.id.rvComments);
+        EditText etCommentInput = dialogView.findViewById(R.id.etCommentInput);
+        ImageButton btnSendComment = dialogView.findViewById(R.id.btnSendComment);
+
+        List<Comment> commentList = db.commentDao().getCommentsByPostId(post.getId());
+        CommentAdapter commentAdapter = new CommentAdapter(commentList);
+        rvComments.setLayoutManager(new LinearLayoutManager(this));
+        rvComments.setAdapter(commentAdapter);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(dialogView)
+                .create();
+
+        btnSendComment.setOnClickListener(v -> {
+            String content = etCommentInput.getText().toString().trim();
+            if (!content.isEmpty()) {
+                User user = db.userDao().getUserById(currentUserId);
+                Comment comment = new Comment(post.getId(), currentUserId, user.getFullName(), content, System.currentTimeMillis());
+                db.commentDao().insertComment(comment);
+                
+                etCommentInput.setText("");
+                commentList.clear();
+                commentList.addAll(db.commentDao().getCommentsByPostId(post.getId()));
+                commentAdapter.notifyDataSetChanged();
+                rvComments.scrollToPosition(commentList.size() - 1);
+                
+                postAdapter.notifyDataSetChanged(); // Cập nhật số lượng comment ở ngoài
+            }
+        });
+
+        dialog.show();
+    }
+
+    @Override
+    public void onShareClick(Post post) {
+        new AlertDialog.Builder(this)
+                .setTitle("Chia sẻ")
+                .setMessage("Bạn có muốn chia sẻ bài viết này lên tường của mình không?")
+                .setPositiveButton("Chia sẻ", (dialog, which) -> {
+                    User user = db.userDao().getUserById(currentUserId);
+                    String sharedContent = "[Shared from " + post.getUserName() + "]: " + post.getContent();
+                    Post sharedPost = new Post(currentUserId, user.getFullName(), sharedContent, post.getImageUri(), System.currentTimeMillis());
+                    db.postDao().insertPost(sharedPost);
+                    loadPosts();
+                    Toast.makeText(MainActivity.this, "Đã chia sẻ lên tường cá nhân", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
     }
 }
