@@ -6,11 +6,14 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
@@ -50,6 +53,8 @@ public class NotificationActivity extends AppCompatActivity {
 
     private void setupBottomNavigation() {
         BottomNavigationView bottomNavigation = findViewById(R.id.bottomNavigation);
+        if (bottomNavigation == null) return;
+        
         bottomNavigation.setSelectedItemId(R.id.nav_notifications);
         bottomNavigation.setOnItemSelectedListener(item -> {
             int itemId = item.getItemId();
@@ -58,7 +63,8 @@ public class NotificationActivity extends AppCompatActivity {
                 finish();
                 return true;
             } else if (itemId == R.id.nav_profile) {
-                startActivity(new Intent(this, ProfileActivity.class));
+                Intent intent = new Intent(this, ProfileActivity.class);
+                startActivity(intent);
                 finish();
                 return true;
             } else if (itemId == R.id.nav_friends) {
@@ -68,10 +74,37 @@ public class NotificationActivity extends AppCompatActivity {
             } else if (itemId == R.id.nav_notifications) {
                 return true;
             } else if (itemId == R.id.nav_menu) {
+                showMenuDialog(); // Thêm xử lý hiển thị menu ở tab Notification
                 return true;
             }
             return false;
         });
+    }
+
+    private void showMenuDialog() {
+        String[] options = {"Chế độ tối", "Đăng xuất"};
+        new AlertDialog.Builder(this)
+                .setTitle("Cài đặt")
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) toggleDarkMode();
+                    else if (which == 1) logoutUser();
+                })
+                .show();
+    }
+
+    private void toggleDarkMode() {
+        SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
+        boolean isDarkMode = pref.getBoolean("dark_mode", false);
+        pref.edit().putBoolean("dark_mode", !isDarkMode).apply();
+        AppCompatDelegate.setDefaultNightMode(!isDarkMode ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
+        recreate();
+    }
+
+    private void logoutUser() {
+        FirebaseAuth.getInstance().signOut();
+        getSharedPreferences("AppPrefs", MODE_PRIVATE).edit().clear().apply();
+        startActivity(new Intent(this, LoginActivity.class));
+        finishAffinity();
     }
 
     private void listenForNotifications() {
