@@ -2,4 +2,21 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Facebook Brand Colors -->
+    <color name="fb_blue">#1877F2</color>
+
+    <!-- Light Theme Colors -->
+    <color name="bg_light">#F0F2F5</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="text_primary_light">#050505</color>
+    <color name="text_secondary_light">#65676B</color>
+    <color name="divider_light">#CED0D4</color>
+
+    <!-- Dark Theme Colors -->
+    <color name="bg_dark">#18191A</color>
+    <color name="surface_dark">#242526</color>
+    <color name="text_primary_dark">#E4E6EB</color>
+    <color name="text_secondary_dark">#B0B3B8</color>
+    <color name="divider_dark">#3E4042</color>
 </resources>

@@ -1,6 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
-    id("com.google.gms.google-services") // Thêm plugin Google Services
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -37,19 +37,22 @@ dependencies {
     implementation(libs.material)
     implementation(libs.activity)
     implementation(libs.constraintlayout)
+    implementation(libs.swiperefreshlayout)
     
     // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
-    implementation("com.google.firebase:firebase-auth")      // Xác thực người dùng
-    implementation("com.google.firebase:firebase-firestore") // Cơ sở dữ liệu đám mây
-    implementation("com.google.firebase:firebase-storage")   // Lưu trữ hình ảnh
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.auth)
+    
+    // Room components
+    implementation(libs.room.runtime)
+    annotationProcessor(libs.room.compiler)
 
     // Glide for image loading
     implementation(libs.glide)
-
-    // Room (vẫn giữ nếu bạn muốn lưu cache offline)
-    implementation(libs.room.runtime)
-    annotationProcessor(libs.room.compiler)
+    
+    // CircleImageView
+    implementation(libs.circleimageview)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

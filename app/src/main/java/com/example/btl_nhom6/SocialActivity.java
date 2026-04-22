@@ -12,6 +12,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.tabs.TabLayout;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
@@ -79,6 +80,34 @@ public class SocialActivity extends AppCompatActivity {
         });
 
         refreshContent();
+        setupBottomNavigation();
+    }
+
+    private void setupBottomNavigation() {
+        BottomNavigationView bottomNavigation = findViewById(R.id.bottomNavigation);
+        bottomNavigation.setSelectedItemId(R.id.nav_friends);
+        bottomNavigation.setOnItemSelectedListener(item -> {
+            int itemId = item.getItemId();
+            if (itemId == R.id.nav_home) {
+                startActivity(new Intent(this, MainActivity.class));
+                finish();
+                return true;
+            } else if (itemId == R.id.nav_profile) {
+                startActivity(new Intent(this, ProfileActivity.class));
+                finish();
+                return true;
+            } else if (itemId == R.id.nav_notifications) {
+                startActivity(new Intent(this, NotificationActivity.class));
+                finish();
+                return true;
+            } else if (itemId == R.id.nav_friends) {
+                return true;
+            } else if (itemId == R.id.nav_menu) {
+                // Show menu dialog if needed or handle accordingly
+                return true;
+            }
+            return false;
+        });
     }
 
     private void setupAdapter() {

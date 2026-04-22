@@ -1,5 +1,6 @@
 package com.example.btl_nhom6;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.View;
@@ -9,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
@@ -22,7 +24,7 @@ public class NotificationActivity extends AppCompatActivity {
     private TextView tvNoNotif;
     private NotificationAdapter adapter;
     private List<Notification> notificationList;
-    private FirebaseFirestore db; // Dùng FirebaseFirestore
+    private FirebaseFirestore db;
     private String currentUserEmail;
 
     @Override
@@ -43,6 +45,33 @@ public class NotificationActivity extends AppCompatActivity {
         rvNotifications.setAdapter(adapter);
 
         listenForNotifications();
+        setupBottomNavigation();
+    }
+
+    private void setupBottomNavigation() {
+        BottomNavigationView bottomNavigation = findViewById(R.id.bottomNavigation);
+        bottomNavigation.setSelectedItemId(R.id.nav_notifications);
+        bottomNavigation.setOnItemSelectedListener(item -> {
+            int itemId = item.getItemId();
+            if (itemId == R.id.nav_home) {
+                startActivity(new Intent(this, MainActivity.class));
+                finish();
+                return true;
+            } else if (itemId == R.id.nav_profile) {
+                startActivity(new Intent(this, ProfileActivity.class));
+                finish();
+                return true;
+            } else if (itemId == R.id.nav_friends) {
+                startActivity(new Intent(this, SocialActivity.class));
+                finish();
+                return true;
+            } else if (itemId == R.id.nav_notifications) {
+                return true;
+            } else if (itemId == R.id.nav_menu) {
+                return true;
+            }
+            return false;
+        });
     }
 
     private void listenForNotifications() {
@@ -65,8 +94,6 @@ public class NotificationActivity extends AppCompatActivity {
                         } else {
                             tvNoNotif.setVisibility(View.GONE);
                         }
-                        
-                        // Sau khi load xong, đánh dấu tất cả là đã đọc trên Server
                         markAllAsRead();
                     }
                 });

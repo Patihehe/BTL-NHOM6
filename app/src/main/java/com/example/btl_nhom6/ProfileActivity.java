@@ -10,7 +10,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -23,6 +22,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
@@ -39,7 +39,7 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
     private RecyclerView rvUserPosts;
     private PostAdapter postAdapter;
     private List<Post> userPostList;
-    private FirebaseFirestore db; 
+    private FirebaseFirestore db;
     private User profileUser;
     private String profileUserId;
     private String currentUserId;
@@ -116,14 +116,48 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
 
         loadProfileData();
         loadUserPosts();
+        setupBottomNavigation();
 
         btnEditProfile.setOnClickListener(v -> showEditProfileDialog());
-        
         btnChat.setOnClickListener(v -> {
             Intent intent = new Intent(ProfileActivity.this, ChatActivity.class);
             intent.putExtra("receiver_email", profileUser.getEmail());
             intent.putExtra("receiver_name", profileUser.getFullName());
             startActivity(intent);
+        });
+    }
+
+    private void setupBottomNavigation() {
+        BottomNavigationView bottomNavigation = findViewById(R.id.bottomNavigation);
+        if (profileUserId.equals(currentUserId)) {
+            bottomNavigation.setSelectedItemId(R.id.nav_profile);
+        }
+        bottomNavigation.setOnItemSelectedListener(item -> {
+            int itemId = item.getItemId();
+            if (itemId == R.id.nav_home) {
+                startActivity(new Intent(this, MainActivity.class));
+                finish();
+                return true;
+            } else if (itemId == R.id.nav_friends) {
+                startActivity(new Intent(this, SocialActivity.class));
+                finish();
+                return true;
+            } else if (itemId == R.id.nav_notifications) {
+                startActivity(new Intent(this, NotificationActivity.class));
+                finish();
+                return true;
+            } else if (itemId == R.id.nav_profile) {
+                if (!profileUserId.equals(currentUserId)) {
+                   Intent intent = new Intent(this, ProfileActivity.class);
+                   intent.putExtra("profile_user_id", currentUserId);
+                   startActivity(intent);
+                   finish();
+                }
+                return true;
+            } else if (itemId == R.id.nav_menu) {
+                return true;
+            }
+            return false;
         });
     }
 
