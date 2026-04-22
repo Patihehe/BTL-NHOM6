@@ -1,11 +1,13 @@
 package com.example.btl_nhom6;
 
+import com.google.firebase.firestore.PropertyName;
+
 public class Notification {
     private String id;
     private String userEmail; 
     private String content;   
     private long timestamp;
-    private boolean isRead;
+    private boolean read; // Đổi tên thành read để Firebase tự hiểu
 
     public Notification() {}
 
@@ -13,7 +15,7 @@ public class Notification {
         this.userEmail = userEmail;
         this.content = content;
         this.timestamp = timestamp;
-        this.isRead = false;
+        this.read = false;
     }
 
     public String getId() { return id; }
@@ -24,6 +26,9 @@ public class Notification {
     public void setContent(String content) { this.content = content; }
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
-    public boolean isRead() { return isRead; }
-    public void setRead(boolean read) { isRead = read; }
+
+    @PropertyName("isRead") // Ép Firebase dùng đúng tên trường này
+    public boolean isRead() { return read; }
+    @PropertyName("isRead")
+    public void setRead(boolean read) { this.read = read; }
 }

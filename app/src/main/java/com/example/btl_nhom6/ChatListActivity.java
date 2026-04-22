@@ -55,7 +55,6 @@ public class ChatListActivity extends AppCompatActivity {
     }
 
     private void loadRecentChats() {
-        // Lấy toàn bộ tin nhắn liên quan đến người dùng hiện tại để tìm danh sách người đã chat
         db.collection("messages")
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .addSnapshotListener((value, error) -> {
@@ -71,24 +70,27 @@ public class ChatListActivity extends AppCompatActivity {
                             }
                         }
                         
-                        chatUsers.clear();
                         if (emails.isEmpty()) {
+                            chatUsers.clear();
                             tvNoChats.setVisibility(View.VISIBLE);
                             adapter.notifyDataSetChanged();
                         } else {
                             tvNoChats.setVisibility(View.GONE);
-                            // Query thông tin từng user từ email
-                            for (String email : emails) {
-                                db.collection("users")
-                                        .whereEqualTo("email", email)
-                                        .get()
-                                        .addOnSuccessListener(queryDocumentSnapshots -> {
-                                            for (QueryDocumentSnapshot userDoc : queryDocumentSnapshots) {
-                                                chatUsers.add(userDoc.toObject(User.class));
-                                            }
-                                            adapter.notifyDataSetChanged();
-                                        });
-                            }
+                            
+                            // Chuyển Set sang List và giới hạn tối đa 30 người (giới hạn của Firestore whereIn)
+                            List<String> emailList = new ArrayList<>(emails);
+                            if (emailList.size() > 30) emailList = emailList.subList(0, 30);
+
+                            db.collection("users")
+                                    .whereIn("email", emailList)
+                                    .get()
+                                    .addOnSuccessListener(queryDocumentSnapshots -> {
+                                        chatUsers.clear(); // Chỉ clear ngay trước khi đổ dữ liệu mới vào
+                                        for (QueryDocumentSnapshot userDoc : queryDocumentSnapshots) {
+                                            chatUsers.add(userDoc.toObject(User.class));
+                                        }
+                                        adapter.notifyDataSetChanged();
+                                    });
                         }
                     }
                 });

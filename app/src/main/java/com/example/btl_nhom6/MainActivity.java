@@ -1,15 +1,18 @@
 package com.example.btl_nhom6;
 
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -21,6 +24,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.google.android.material.badge.BadgeDrawable;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -44,6 +48,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     private List<Post> postList;
     private FirebaseFirestore db;
     private String currentUserName;
+    private String currentUserEmail;
     private String currentUserId; 
     private Uri selectedImageUri = null;
     private Set<String> friendsIds = new HashSet<>();
@@ -56,9 +61,11 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
             uri -> {
                 if (uri != null) {
                     selectedImageUri = uri;
-                    ivSelectedPreview.setImageURI(uri);
-                    ivSelectedPreview.setVisibility(View.VISIBLE);
-                    btnClearImage.setVisibility(View.VISIBLE);
+                    if(ivSelectedPreview != null) {
+                        ivSelectedPreview.setImageURI(uri);
+                        ivSelectedPreview.setVisibility(View.VISIBLE);
+                    }
+                    if(btnClearImage != null) btnClearImage.setVisibility(View.VISIBLE);
                     try {
                         getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     } catch (SecurityException e) {
@@ -72,7 +79,6 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Load Dark Mode state
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         boolean isDarkMode = pref.getBoolean("dark_mode", false);
         if (isDarkMode) {
@@ -95,7 +101,9 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
 
         currentUserId = mAuth.getCurrentUser().getUid();
         currentUserName = pref.getString("current_user_name", "Anonymous");
+        currentUserEmail = pref.getString("current_user_email", "");
 
+        // Sửa các ID để khớp với activity_main.xml
         etPostInput = findViewById(R.id.etPostInput);
         btnPost = findViewById(R.id.btnPost);
         btnPickImage = findViewById(R.id.btnPickImage);
@@ -114,73 +122,123 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         recyclerViewPosts.setAdapter(postAdapter);
 
         loadFriendsAndListenPosts();
+        listenForNotifications();
 
-        btnPickImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
-        btnClearImage.setOnClickListener(v -> {
+        if(btnPickImage != null) btnPickImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+        if(btnClearImage != null) btnClearImage.setOnClickListener(v -> {
             selectedImageUri = null;
-            ivSelectedPreview.setVisibility(View.GONE);
+            if(ivSelectedPreview != null) ivSelectedPreview.setVisibility(View.GONE);
             btnClearImage.setVisibility(View.GONE);
         });
 
-        btnPost.setOnClickListener(v -> {
-            String content = etPostInput.getText().toString().trim();
+        if(btnPost != null) btnPost.setOnClickListener(v -> {
+            String content = (etPostInput != null) ? etPostInput.getText().toString().trim() : "";
             if (!content.isEmpty() || selectedImageUri != null) {
                 String uriString = (selectedImageUri != null) ? selectedImageUri.toString() : "";
                 
                 String privacy = "public";
-                int selectedPrivacyIndex = spinnerPrivacy.getSelectedItemPosition();
-                if (selectedPrivacyIndex == 1) privacy = "friends";
-                else if (selectedPrivacyIndex == 2) privacy = "private";
+                if(spinnerPrivacy != null) {
+                    int selectedPrivacyIndex = spinnerPrivacy.getSelectedItemPosition();
+                    if (selectedPrivacyIndex == 1) privacy = "friends";
+                    else if (selectedPrivacyIndex == 2) privacy = "private";
+                }
 
-                Post post = new Post(currentUserId, currentUserName, content, uriString, System.currentTimeMillis(), privacy);
+                Post post = new Post(currentUserId, currentUserName, content, uriString, System.currentTimeMillis());
+                post.setPrivacy(privacy);
                 db.collection("posts").add(post)
                         .addOnSuccessListener(documentReference -> {
                             String id = documentReference.getId();
                             db.collection("posts").document(id).update("postId", id);
-                            etPostInput.setText("");
+                            if(etPostInput != null) etPostInput.setText("");
                             selectedImageUri = null;
-                            ivSelectedPreview.setVisibility(View.GONE);
-                            btnClearImage.setVisibility(View.GONE);
+                            if(ivSelectedPreview != null) ivSelectedPreview.setVisibility(View.GONE);
+                            if(btnClearImage != null) btnClearImage.setVisibility(View.GONE);
                             Toast.makeText(MainActivity.this, "Đã đăng bài!", Toast.LENGTH_SHORT).show();
                         });
             }
         });
 
-        btnMessenger.setOnClickListener(v -> {
+        if(btnMessenger != null) btnMessenger.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, ChatListActivity.class);
             startActivity(intent);
         });
         
-        // Swipe to Refresh logic
-        swipeRefreshLayout.setOnRefreshListener(() -> {
+        if(swipeRefreshLayout != null) swipeRefreshLayout.setOnRefreshListener(() -> {
             loadFriendsAndListenPosts();
             swipeRefreshLayout.setRefreshing(false);
         });
         
-        // Bottom Navigation logic
-        bottomNavigation.setOnItemSelectedListener(item -> {
-            int itemId = item.getItemId();
-            if (itemId == R.id.nav_home) {
-                recyclerViewPosts.smoothScrollToPosition(0);
-                return true;
-            } else if (itemId == R.id.nav_profile) {
-                Intent intent = new Intent(MainActivity.this, ProfileActivity.class);
-                startActivity(intent);
-                return true;
-            } else if (itemId == R.id.nav_menu) {
-                showMenuDialog();
-                return true;
-            } else if (itemId == R.id.nav_notifications) {
-                 Intent intent = new Intent(MainActivity.this, NotificationActivity.class);
-                 startActivity(intent);
-                 return true;
-            } else if (itemId == R.id.nav_friends) {
-                 Intent intent = new Intent(MainActivity.this, SocialActivity.class);
-                 startActivity(intent);
-                 return true;
-            }
-            return false;
-        });
+        if(bottomNavigation != null) {
+            bottomNavigation.setOnItemSelectedListener(item -> {
+                int itemId = item.getItemId();
+                if (itemId == R.id.nav_home) {
+                    recyclerViewPosts.smoothScrollToPosition(0);
+                    return true;
+                } else if (itemId == R.id.nav_profile) {
+                    Intent intent = new Intent(MainActivity.this, ProfileActivity.class);
+                    startActivity(intent);
+                    return true;
+                } else if (itemId == R.id.nav_menu) {
+                    showMenuDialog();
+                    return true;
+                } else if (itemId == R.id.nav_notifications) {
+                     BadgeDrawable badge = bottomNavigation.getBadge(R.id.nav_notifications);
+                     if (badge != null) {
+                         badge.setVisible(false);
+                         badge.clearNumber();
+                     }
+                     markAllNotificationsAsRead();
+                     Intent intent = new Intent(MainActivity.this, NotificationActivity.class);
+                     startActivity(intent);
+                     return true;
+                } else if (itemId == R.id.nav_friends) {
+                     Intent intent = new Intent(MainActivity.this, SocialActivity.class);
+                     startActivity(intent);
+                     return true;
+                }
+                return false;
+            });
+        }
+    }
+    
+    private void markAllNotificationsAsRead() {
+        db.collection("notifications")
+                .whereEqualTo("userEmail", currentUserEmail)
+                .whereEqualTo("isRead", false)
+                .get()
+                .addOnSuccessListener(queryDocumentSnapshots -> {
+                    for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
+                        doc.getReference().update("isRead", true);
+                    }
+                });
+    }
+
+    private void listenForNotifications() {
+        if(bottomNavigation == null) return;
+        db.collection("notifications")
+                .whereEqualTo("userEmail", currentUserEmail)
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) return;
+                    int unreadCount = 0;
+                    if (value != null) {
+                        for (QueryDocumentSnapshot doc : value) {
+                            Boolean isRead = doc.getBoolean("isRead");
+                            if (isRead != null && !isRead) unreadCount++;
+                        }
+                    }
+                    
+                    if (unreadCount > 0) {
+                        BadgeDrawable badge = bottomNavigation.getOrCreateBadge(R.id.nav_notifications);
+                        badge.setNumber(unreadCount);
+                        badge.setVisible(true);
+                    } else {
+                        BadgeDrawable badge = bottomNavigation.getBadge(R.id.nav_notifications);
+                        if (badge != null) {
+                            badge.setVisible(false);
+                            badge.clearNumber();
+                        }
+                    }
+                });
     }
     
     private void showMenuDialog() {
@@ -221,7 +279,6 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
             editor.putBoolean("dark_mode", true);
         }
         editor.apply();
-        recreate();
     }
 
     private void loadFriendsAndListenPosts() {
@@ -283,11 +340,79 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
 
     @Override
     public void onCommentClick(Post post) {
-        // Implement comment logic if needed
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_comments, null);
+        RecyclerView rvComments = dialogView.findViewById(R.id.rvComments);
+        EditText etCommentInput = dialogView.findViewById(R.id.etCommentInput);
+        ImageButton btnSendComment = dialogView.findViewById(R.id.btnSendComment);
+
+        List<Comment> commentList = new ArrayList<>();
+        CommentAdapter commentAdapter = new CommentAdapter(commentList);
+        rvComments.setLayoutManager(new LinearLayoutManager(this));
+        rvComments.setAdapter(commentAdapter);
+
+        db.collection("comments")
+                .whereEqualTo("postId", post.getPostId())
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .addSnapshotListener((value, error) -> {
+                    if (value != null) {
+                        commentList.clear();
+                        for (QueryDocumentSnapshot doc : value) {
+                            commentList.add(doc.toObject(Comment.class));
+                        }
+                        commentAdapter.notifyDataSetChanged();
+                        if(!commentList.isEmpty()) rvComments.scrollToPosition(commentList.size()-1);
+                    }
+                });
+
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(dialogView).create();
+
+        btnSendComment.setOnClickListener(v -> {
+            String content = etCommentInput.getText().toString().trim();
+            if (!content.isEmpty()) {
+                Comment comment = new Comment(post.getPostId(), currentUserId, currentUserName, content, System.currentTimeMillis());
+                db.collection("comments").add(comment).addOnSuccessListener(doc -> {
+                    doc.update("commentId", doc.getId());
+                    etCommentInput.setText("");
+                    
+                    if (!post.getUserId().equals(currentUserId)) {
+                        db.collection("users").document(post.getUserId()).get().addOnSuccessListener(userDoc -> {
+                            String ownerEmail = userDoc.getString("email");
+                            if (ownerEmail != null) {
+                                Notification notif = new Notification(ownerEmail, currentUserName + " đã bình luận bài viết của bạn", System.currentTimeMillis());
+                                db.collection("notifications").add(notif);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+        dialog.show();
     }
 
     @Override
     public void onShareClick(Post post) {
-        // Implement share logic if needed
+        new AlertDialog.Builder(this)
+                .setTitle("Chia sẻ")
+                .setMessage("Bạn có muốn chia sẻ bài viết này?")
+                .setPositiveButton("Chia sẻ", (dialog, which) -> {
+                    String sharedContent = "[Shared from " + post.getUserName() + "]: " + post.getContent();
+                    Post sharedPost = new Post(currentUserId, currentUserName, sharedContent, post.getImageUri(), System.currentTimeMillis());
+                    db.collection("posts").add(sharedPost).addOnSuccessListener(doc -> {
+                        doc.update("postId", doc.getId());
+                        Toast.makeText(this, "Đã chia sẻ!", Toast.LENGTH_SHORT).show();
+                        
+                        if (!post.getUserId().equals(currentUserId)) {
+                            db.collection("users").document(post.getUserId()).get().addOnSuccessListener(userDoc -> {
+                                String ownerEmail = userDoc.getString("email");
+                                if (ownerEmail != null) {
+                                    Notification notif = new Notification(ownerEmail, currentUserName + " đã chia sẻ bài viết của bạn", System.currentTimeMillis());
+                                    db.collection("notifications").add(notif);
+                                }
+                            });
+                        }
+                    });
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
     }
 }
