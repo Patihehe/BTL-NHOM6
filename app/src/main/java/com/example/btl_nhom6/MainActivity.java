@@ -42,7 +42,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     private Button btnPost;
     private ImageButton btnPickImage, btnClearImage, btnMessenger;
     private Spinner spinnerPrivacy;
-    private ImageView ivSelectedPreview;
+    private ImageView ivUserAvatarMain;
     private RecyclerView recyclerViewPosts;
     private PostAdapter postAdapter;
     private List<Post> postList;
@@ -108,7 +108,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         btnPickImage = findViewById(R.id.btnPickImage);
         btnClearImage = findViewById(R.id.btnClearImage);
         btnMessenger = findViewById(R.id.btnMessenger);
-        ivSelectedPreview = findViewById(R.id.ivSelectedPreview);
+        ivUserAvatarMain = findViewById(R.id.ivUserAvatarMain);
         recyclerViewPosts = findViewById(R.id.recyclerViewPosts);
         spinnerPrivacy = findViewById(R.id.spinnerPrivacy);
         
@@ -126,7 +126,8 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         if(btnPickImage != null) btnPickImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
         if(btnClearImage != null) btnClearImage.setOnClickListener(v -> {
             selectedImageUri = null;
-            if(ivSelectedPreview != null) ivSelectedPreview.setVisibility(View.GONE);
+            ImageView ivPreview = findViewById(R.id.ivSelectedPreview);
+            if(ivPreview != null) ivPreview.setVisibility(View.GONE);
             btnClearImage.setVisibility(View.GONE);
         });
 
@@ -150,7 +151,8 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                             db.collection("posts").document(id).update("postId", id);
                             if(etPostInput != null) etPostInput.setText("");
                             selectedImageUri = null;
-                            if(ivSelectedPreview != null) ivSelectedPreview.setVisibility(View.GONE);
+                            ImageView ivPreview = findViewById(R.id.ivSelectedPreview);
+                            if(ivPreview != null) ivPreview.setVisibility(View.GONE);
                             if(btnClearImage != null) btnClearImage.setVisibility(View.GONE);
                             Toast.makeText(MainActivity.this, "Đã đăng bài!", Toast.LENGTH_SHORT).show();
                         });
@@ -178,9 +180,14 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                     startActivity(intent);
                     return true;
                 } else if (itemId == R.id.nav_menu) {
-                    showMenuDialog(); // Mở menu ở MainActivity
+                    showMenuDialog();
                     return true;
                 } else if (itemId == R.id.nav_notifications) {
+                     BadgeDrawable badge = bottomNavigation.getBadge(R.id.nav_notifications);
+                     if (badge != null) {
+                         badge.setVisible(false);
+                         badge.clearNumber();
+                     }
                      markAllNotificationsAsRead();
                      Intent intent = new Intent(MainActivity.this, NotificationActivity.class);
                      startActivity(intent);
@@ -226,7 +233,11 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                         badge.setNumber(unreadCount);
                         badge.setVisible(true);
                     } else {
-                        bottomNavigation.removeBadge(R.id.nav_notifications);
+                        BadgeDrawable badge = bottomNavigation.getBadge(R.id.nav_notifications);
+                        if (badge != null) {
+                            badge.setVisible(false);
+                            badge.clearNumber();
+                        }
                     }
                 });
     }
@@ -234,10 +245,13 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     private void showMenuDialog() {
         String[] options = {"Chế độ tối", "Đăng xuất"};
         new AlertDialog.Builder(this)
-                .setTitle("Cài đặt")
+                .setTitle("Menu")
                 .setItems(options, (dialog, which) -> {
-                    if (which == 0) toggleDarkMode();
-                    else if (which == 1) logoutUser();
+                    if (which == 0) {
+                        toggleDarkMode();
+                    } else if (which == 1) {
+                        logoutUser();
+                    }
                 })
                 .show();
     }
@@ -256,8 +270,16 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     private void toggleDarkMode() {
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         boolean isDarkMode = pref.getBoolean("dark_mode", false);
-        pref.edit().putBoolean("dark_mode", !isDarkMode).apply();
-        recreate();
+        SharedPreferences.Editor editor = pref.edit();
+        
+        if (isDarkMode) {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+            editor.putBoolean("dark_mode", false);
+        } else {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+            editor.putBoolean("dark_mode", true);
+        }
+        editor.apply();
     }
 
     private void loadFriendsAndListenPosts() {
@@ -317,6 +339,81 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                 .show();
     }
 
-    @Override public void onCommentClick(Post post) {}
-    @Override public void onShareClick(Post post) {}
+    @Override
+    public void onCommentClick(Post post) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_comments, null);
+        RecyclerView rvComments = dialogView.findViewById(R.id.rvComments);
+        EditText etCommentInput = dialogView.findViewById(R.id.etCommentInput);
+        ImageButton btnSendComment = dialogView.findViewById(R.id.btnSendComment);
+
+        List<Comment> commentList = new ArrayList<>();
+        CommentAdapter commentAdapter = new CommentAdapter(commentList);
+        rvComments.setLayoutManager(new LinearLayoutManager(this));
+        rvComments.setAdapter(commentAdapter);
+
+        db.collection("comments")
+                .whereEqualTo("postId", post.getPostId())
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .addSnapshotListener((value, error) -> {
+                    if (value != null) {
+                        commentList.clear();
+                        for (QueryDocumentSnapshot doc : value) {
+                            commentList.add(doc.toObject(Comment.class));
+                        }
+                        commentAdapter.notifyDataSetChanged();
+                        if(!commentList.isEmpty()) rvComments.scrollToPosition(commentList.size()-1);
+                    }
+                });
+
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(dialogView).create();
+
+        btnSendComment.setOnClickListener(v -> {
+            String content = etCommentInput.getText().toString().trim();
+            if (!content.isEmpty()) {
+                Comment comment = new Comment(post.getPostId(), currentUserId, currentUserName, content, System.currentTimeMillis());
+                db.collection("comments").add(comment).addOnSuccessListener(doc -> {
+                    doc.update("commentId", doc.getId());
+                    etCommentInput.setText("");
+                    
+                    if (!post.getUserId().equals(currentUserId)) {
+                        db.collection("users").document(post.getUserId()).get().addOnSuccessListener(userDoc -> {
+                            String ownerEmail = userDoc.getString("email");
+                            if (ownerEmail != null) {
+                                Notification notif = new Notification(ownerEmail, currentUserName + " đã bình luận bài viết của bạn", System.currentTimeMillis());
+                                db.collection("notifications").add(notif);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+        dialog.show();
+    }
+
+    @Override
+    public void onShareClick(Post post) {
+        new AlertDialog.Builder(this)
+                .setTitle("Chia sẻ")
+                .setMessage("Bạn có muốn chia sẻ bài viết này?")
+                .setPositiveButton("Chia sẻ", (dialog, which) -> {
+                    String sharedContent = "[Shared from " + post.getUserName() + "]: " + post.getContent();
+                    Post sharedPost = new Post(currentUserId, currentUserName, sharedContent, post.getImageUri(), System.currentTimeMillis());
+                    db.collection("posts").add(sharedPost).addOnSuccessListener(doc -> {
+                        doc.update("postId", doc.getId());
+                        Toast.makeText(this, "Đã chia sẻ!", Toast.LENGTH_SHORT).show();
+                        
+                        if (!post.getUserId().equals(currentUserId)) {
+                            db.collection("users").document(post.getUserId()).get().addOnSuccessListener(userDoc -> {
+                                String ownerEmail = userDoc.getString("email");
+                                if (ownerEmail != null) {
+                                    Notification notif = new Notification(ownerEmail, currentUserName + " đã chia sẻ bài viết của bạn", System.currentTimeMillis());
+                                    db.collection("notifications").add(notif);
+                                }
+                            });
+                        }
+                    });
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
 }

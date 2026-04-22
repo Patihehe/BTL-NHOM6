@@ -52,6 +52,9 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
             new ActivityResultContracts.GetContent(),
             uri -> {
                 if (uri != null) {
+                    try {
+                        getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    } catch (Exception e) {}
                     if (isChangingAvatar) {
                         profileUser.setAvatarUri(uri.toString());
                         Glide.with(this).load(uri).into(ivAvatar);
@@ -89,11 +92,8 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         rvUserPosts = findViewById(R.id.rvUserPosts);
         bottomNavigation = findViewById(R.id.bottomNavigation);
 
-        // ĐỒNG BỘ THANH MENU CHO TRANG PROFILE
         if (bottomNavigation != null) {
-            if (profileUserId.equals(currentUserId)) {
-                bottomNavigation.setSelectedItemId(R.id.nav_profile);
-            }
+            bottomNavigation.setSelectedItemId(R.id.nav_profile);
             bottomNavigation.setOnItemSelectedListener(item -> {
                 int id = item.getItemId();
                 if (id == R.id.nav_home) {
@@ -106,7 +106,7 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
                     startActivity(new Intent(this, NotificationActivity.class));
                     finish();
                 } else if (id == R.id.nav_menu) {
-                    showMenuDialog(); // HIỂN THỊ MENU
+                    showMenuDialog();
                 } else if (id == R.id.nav_profile) {
                     if (!profileUserId.equals(currentUserId)) {
                         Intent intent = new Intent(this, ProfileActivity.class);
@@ -191,11 +191,14 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
     private void displayUserInfo() {
         if (profileUser == null) return;
         tvFullName.setText(profileUser.getFullName());
-        tvBio.setText(profileUser.getBio());
-        tvLocation.setText(profileUser.getLocation());
-        tvDob.setText(profileUser.getDob());
+        tvBio.setText(profileUser.getBio() != null && !profileUser.getBio().isEmpty() ? profileUser.getBio() : "Chưa có tiểu sử");
+        tvLocation.setText("Sống tại " + (profileUser.getLocation() != null && !profileUser.getLocation().isEmpty() ? profileUser.getLocation() : "..."));
+        tvDob.setText("Ngày sinh: " + (profileUser.getDob() != null && !profileUser.getDob().isEmpty() ? profileUser.getDob() : "..."));
         if (profileUser.getAvatarUri() != null && !profileUser.getAvatarUri().isEmpty()) {
             Glide.with(this).load(profileUser.getAvatarUri()).into(ivAvatar);
+        }
+        if (profileUser.getCoverPhotoUri() != null && !profileUser.getCoverPhotoUri().isEmpty()) {
+            Glide.with(this).load(profileUser.getCoverPhotoUri()).into(ivCover);
         }
     }
 
@@ -215,9 +218,38 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
     }
 
     private void showEditProfileDialog() {
-        // Logic chỉnh sửa
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_edit_profile, null);
+        builder.setView(view);
+
+        EditText etName = view.findViewById(R.id.etEditName);
+        EditText etBio = view.findViewById(R.id.etEditBio);
+        EditText etDob = view.findViewById(R.id.etEditDob);
+        EditText etLoc = view.findViewById(R.id.etEditLocation);
+        Button btnAvatar = view.findViewById(R.id.btnChangeAvatar);
+        Button btnCover = view.findViewById(R.id.btnChangeCover);
+
+        etName.setText(profileUser.getFullName());
+        etBio.setText(profileUser.getBio());
+        etDob.setText(profileUser.getDob());
+        etLoc.setText(profileUser.getLocation());
+
+        builder.setPositiveButton("Lưu", (dialog, which) -> {
+            profileUser.setFullName(etName.getText().toString());
+            profileUser.setBio(etBio.getText().toString());
+            profileUser.setDob(etDob.getText().toString());
+            profileUser.setLocation(etLoc.getText().toString());
+            db.collection("users").document(profileUserId).set(profileUser);
+            Toast.makeText(this, "Đã cập nhật!", Toast.LENGTH_SHORT).show();
+        });
+        builder.setNegativeButton("Hủy", null);
+
+        btnAvatar.setOnClickListener(v -> { isChangingAvatar = true; pickImageLauncher.launch("image/*"); });
+        btnCover.setOnClickListener(v -> { isChangingAvatar = false; pickImageLauncher.launch("image/*"); });
+
+        builder.show();
     }
 
-    @Override public void onCommentClick(Post post) {}
-    @Override public void onShareClick(Post post) {}
+    @Override public void onCommentClick(Post post) { /* Logic comment Realtime */ }
+    @Override public void onShareClick(Post post) { /* Logic share Realtime */ }
 }
