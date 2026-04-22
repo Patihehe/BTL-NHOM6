@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "634643718333",
+    "project_id": "btl-nhom6-894b2",
+    "storage_bucket": "btl-nhom6-894b2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:634643718333:android:5ecb1f70bc183d732d97d4",
+        "android_client_info": {
+          "package_name": "com.example.btl_nhom6"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfAAP3vfvSjoGONvZtdiRwm5Tv36v8_LM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
