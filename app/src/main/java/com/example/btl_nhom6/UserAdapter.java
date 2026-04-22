@@ -19,7 +19,7 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
     private List<User> userList;
     private OnUserActionListener actionListener;
     private String currentUserId;
-    private FirebaseFirestore db; // Đổi từ AppDatabase sang FirebaseFirestore
+    private FirebaseFirestore db;
 
     public interface OnUserActionListener {
         void onAction(User user);
@@ -53,7 +53,7 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
             holder.ivUserAvatar.setImageResource(android.R.drawable.ic_menu_report_image);
         }
 
-        // Logic kiểm tra trạng thái bạn bè trên Firebase
+        // Reset UI state before checking Firebase
         holder.btnAction.setText("Thêm bạn");
         holder.btnDecline.setVisibility(View.GONE);
         holder.btnAction.setEnabled(true);
@@ -62,27 +62,44 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
                 .whereIn("userId", java.util.Arrays.asList(currentUserId, user.getId()))
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
+                    String finalStatus = null;
+                    String initiatorId = null;
+
                     for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
                         String uid = doc.getString("userId");
                         String fid = doc.getString("friendId");
-                        String status = doc.getString("status");
-
                         if ((uid.equals(currentUserId) && fid.equals(user.getId())) ||
                             (uid.equals(user.getId()) && fid.equals(currentUserId))) {
                             
-                            if (status.equals("PENDING")) {
-                                if (uid.equals(currentUserId)) {
-                                    holder.btnAction.setText("Đã gửi");
-                                    holder.btnAction.setEnabled(false);
-                                } else {
-                                    holder.btnAction.setText("Chấp nhận");
-                                    holder.btnDecline.setVisibility(View.VISIBLE);
-                                }
-                            } else if (status.equals("ACCEPTED")) {
-                                holder.btnAction.setText("Hủy kết bạn");
+                            String s = doc.getString("status");
+                            if ("ACCEPTED".equals(s)) {
+                                finalStatus = s;
+                                initiatorId = uid;
+                                break; // Prioritize ACCEPTED
                             }
-                            break;
+                            finalStatus = s;
+                            initiatorId = uid;
                         }
+                    }
+
+                    if ("ACCEPTED".equals(finalStatus)) {
+                        holder.btnAction.setText("Hủy kết bạn");
+                        holder.btnDecline.setVisibility(View.GONE);
+                        holder.btnAction.setEnabled(true);
+                    } else if ("PENDING".equals(finalStatus)) {
+                        if (currentUserId.equals(initiatorId)) {
+                            holder.btnAction.setText("Đã gửi");
+                            holder.btnAction.setEnabled(false);
+                            holder.btnDecline.setVisibility(View.GONE);
+                        } else {
+                            holder.btnAction.setText("Chấp nhận");
+                            holder.btnDecline.setVisibility(View.VISIBLE);
+                            holder.btnAction.setEnabled(true);
+                        }
+                    } else {
+                        holder.btnAction.setText("Thêm bạn");
+                        holder.btnDecline.setVisibility(View.GONE);
+                        holder.btnAction.setEnabled(true);
                     }
                 });
 

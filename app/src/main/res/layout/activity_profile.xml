@@ -85,14 +85,25 @@
                             android:textAllCaps="false" />
 
                         <Button
+                            android:id="@+id/btnFriendAction"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:backgroundTint="#1877F2"
+                            android:text="Thêm bạn bè"
+                            android:textColor="@android:color/white"
+                            android:textAllCaps="false"
+                            android:visibility="gone" />
+
+                        <Button
                             android:id="@+id/btnChat"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:layout_marginStart="8dp"
-                            android:backgroundTint="#1877F2"
+                            android:backgroundTint="#E4E6EB"
                             android:text="Nhắn tin"
-                            android:textColor="@android:color/white"
+                            android:textColor="@android:color/black"
                             android:textAllCaps="false"
                             android:visibility="gone" />
 
