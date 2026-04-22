@@ -3,11 +3,13 @@ package com.example.btl_nhom6;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.text.InputType;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -17,7 +19,7 @@ public class LoginActivity extends AppCompatActivity {
 
     private EditText etEmail, etPassword;
     private Button btnLogin;
-    private TextView tvRegister;
+    private TextView tvRegister, tvForgotPassword;
     
     private FirebaseAuth mAuth;
     private FirebaseFirestore db;
@@ -34,6 +36,7 @@ public class LoginActivity extends AppCompatActivity {
         etPassword = findViewById(R.id.etPassword);
         btnLogin = findViewById(R.id.btnLogin);
         tvRegister = findViewById(R.id.tvRegister);
+        tvForgotPassword = findViewById(R.id.tvForgotPassword);
 
         btnLogin.setOnClickListener(v -> {
             String email = etEmail.getText().toString().trim();
@@ -50,6 +53,31 @@ public class LoginActivity extends AppCompatActivity {
             Intent intent = new Intent(LoginActivity.this, RegisterActivity.class);
             startActivity(intent);
         });
+
+        tvForgotPassword.setOnClickListener(v -> {
+            showForgotPasswordDialog();
+        });
+    }
+
+    private void showForgotPasswordDialog() {
+        EditText resetMail = new EditText(this);
+        resetMail.setHint("Nhập email của bạn");
+        resetMail.setInputType(InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Quên mật khẩu?")
+                .setMessage("Nhập email để nhận liên kết đặt lại mật khẩu.")
+                .setView(resetMail)
+                .setPositiveButton("Gửi", (dialog, which) -> {
+                    String email = resetMail.getText().toString().trim();
+                    if (!email.isEmpty()) {
+                        mAuth.sendPasswordResetEmail(email)
+                                .addOnSuccessListener(aVoid -> Toast.makeText(LoginActivity.this, "Liên kết đã được gửi tới email của bạn", Toast.LENGTH_SHORT).show())
+                                .addOnFailureListener(e -> Toast.makeText(LoginActivity.this, "Lỗi: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                    }
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
     }
 
     private void loginUser(String email, String password) {
@@ -58,13 +86,11 @@ public class LoginActivity extends AppCompatActivity {
                     if (task.isSuccessful()) {
                         String userId = mAuth.getCurrentUser().getUid();
                         
-                        // Lấy thêm thông tin từ Firestore
                         db.collection("users").document(userId).get()
                                 .addOnSuccessListener(documentSnapshot -> {
                                     if (documentSnapshot.exists()) {
                                         String fullName = documentSnapshot.getString("fullName");
                                         
-                                        // Lưu vào SharedPreferences để dùng nhanh (vẫn giữ thói quen cũ)
                                         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
                                         SharedPreferences.Editor editor = pref.edit();
                                         editor.putString("current_user_id", userId);

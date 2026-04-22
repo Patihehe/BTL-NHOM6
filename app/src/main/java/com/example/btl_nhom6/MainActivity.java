@@ -12,6 +12,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -29,13 +30,16 @@ import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity implements PostAdapter.OnPostActionListener {
 
     private EditText etPostInput;
     private Button btnPost;
     private ImageButton btnPickImage, btnClearImage, btnLogout, btnGoToProfile, btnSocial, btnMessenger, btnNotifications;
+    private Spinner spinnerPrivacy;
     private TextView tvNotifBadge;
     private ImageView ivSelectedPreview;
     private RecyclerView recyclerViewPosts;
@@ -46,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     private String currentUserEmail;
     private String currentUserId; 
     private Uri selectedImageUri = null;
+    private Set<String> friendsIds = new HashSet<>();
 
     private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
             new ActivityResultContracts.GetContent(),
@@ -93,6 +98,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         btnSocial = findViewById(R.id.btnSocial);
         btnMessenger = findViewById(R.id.btnMessenger);
         btnNotifications = findViewById(R.id.btnNotifications);
+        spinnerPrivacy = findViewById(R.id.spinnerPrivacy);
         tvNotifBadge = findViewById(R.id.tvNotifBadge);
         ivSelectedPreview = findViewById(R.id.ivSelectedPreview);
         recyclerViewPosts = findViewById(R.id.recyclerViewPosts);
@@ -102,7 +108,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         recyclerViewPosts.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewPosts.setAdapter(postAdapter);
 
-        listenForPosts();
+        loadFriendsAndListenPosts();
         listenForNotifications();
 
         btnPickImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
@@ -116,7 +122,13 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
             String content = etPostInput.getText().toString().trim();
             if (!content.isEmpty() || selectedImageUri != null) {
                 String uriString = (selectedImageUri != null) ? selectedImageUri.toString() : "";
-                Post post = new Post(currentUserId, currentUserName, content, uriString, System.currentTimeMillis());
+                
+                String privacy = "public";
+                int selectedPrivacyIndex = spinnerPrivacy.getSelectedItemPosition();
+                if (selectedPrivacyIndex == 1) privacy = "friends";
+                else if (selectedPrivacyIndex == 2) privacy = "private";
+
+                Post post = new Post(currentUserId, currentUserName, content, uriString, System.currentTimeMillis(), privacy);
                 db.collection("posts").add(post)
                         .addOnSuccessListener(documentReference -> {
                             String id = documentReference.getId();
@@ -146,13 +158,8 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         });
 
         btnNotifications.setOnClickListener(v -> {
-            // 1. Ẩn Badge ngay lập tức để người dùng thấy hiệu ứng reset tức thì
             tvNotifBadge.setVisibility(View.GONE);
-            
-            // 2. Cập nhật tất cả thông báo thành "đã đọc" trên Firestore
             markAllNotificationsAsRead();
-            
-            // 3. Chuyển sang màn hình danh sách thông báo
             Intent intent = new Intent(MainActivity.this, NotificationActivity.class);
             startActivity(intent);
         });
@@ -187,6 +194,25 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                 });
     }
 
+    private void loadFriendsAndListenPosts() {
+        // Tải danh sách bạn bè trước để lọc bài viết
+        db.collection("friendships")
+                .whereEqualTo("status", "ACCEPTED")
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) return;
+                    friendsIds.clear();
+                    if (value != null) {
+                        for (QueryDocumentSnapshot doc : value) {
+                            String uid = doc.getString("userId");
+                            String fid = doc.getString("friendId");
+                            if (currentUserId.equals(uid)) friendsIds.add(fid);
+                            else if (currentUserId.equals(fid)) friendsIds.add(uid);
+                        }
+                    }
+                    listenForPosts();
+                });
+    }
+
     private void listenForPosts() {
         db.collection("posts")
                 .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -195,11 +221,30 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                     postList.clear();
                     if (value != null) {
                         for (QueryDocumentSnapshot doc : value) {
-                            postList.add(doc.toObject(Post.class));
+                            Post post = doc.toObject(Post.class);
+                            if (canViewPost(post)) {
+                                postList.add(post);
+                            }
                         }
                     }
                     postAdapter.notifyDataSetChanged();
                 });
+    }
+
+    private boolean canViewPost(Post post) {
+        String privacy = post.getPrivacy();
+        if (privacy == null || privacy.equals("public")) return true;
+        if (post.getUserId().equals(currentUserId)) return true; // Luôn xem được bài của mình
+        
+        if (privacy.equals("friends")) {
+            return friendsIds.contains(post.getUserId());
+        }
+        
+        if (privacy.equals("private")) {
+            return post.getUserId().equals(currentUserId);
+        }
+        
+        return false;
     }
 
     private void listenForNotifications() {
@@ -214,7 +259,6 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                             if (!n.isRead()) unreadCount++;
                         }
                     }
-                    // Cập nhật giao diện nếu có thông báo chưa đọc
                     if (unreadCount > 0) {
                         tvNotifBadge.setText(String.valueOf(unreadCount));
                         tvNotifBadge.setVisibility(View.VISIBLE);
