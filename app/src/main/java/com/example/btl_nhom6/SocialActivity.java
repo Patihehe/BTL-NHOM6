@@ -12,7 +12,6 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.tabs.TabLayout;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
@@ -43,7 +42,7 @@ public class SocialActivity extends AppCompatActivity {
         db = FirebaseFirestore.getInstance();
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         currentUserId = pref.getString("current_user_id", "");
-        currentUserName = pref.getString("current_user_name", "");
+        currentUserName = pref.getString("current_user_name", "Ai đó");
 
         if (currentUserId.isEmpty()) {
             finish();
@@ -64,50 +63,16 @@ public class SocialActivity extends AppCompatActivity {
             public void onTabSelected(TabLayout.Tab tab) {
                 refreshContent();
             }
-
-            @Override
-            public void onTabUnselected(TabLayout.Tab tab) {}
-
-            @Override
-            public void onTabReselected(TabLayout.Tab tab) {}
+            @Override public void onTabUnselected(TabLayout.Tab tab) {}
+            @Override public void onTabReselected(TabLayout.Tab tab) {}
         });
 
         btnSearch.setOnClickListener(v -> {
             String query = etSearch.getText().toString().trim();
-            if (!query.isEmpty()) {
-                searchUsers(query);
-            }
+            if (!query.isEmpty()) searchUsers(query);
         });
 
         refreshContent();
-        setupBottomNavigation();
-    }
-
-    private void setupBottomNavigation() {
-        BottomNavigationView bottomNavigation = findViewById(R.id.bottomNavigation);
-        bottomNavigation.setSelectedItemId(R.id.nav_friends);
-        bottomNavigation.setOnItemSelectedListener(item -> {
-            int itemId = item.getItemId();
-            if (itemId == R.id.nav_home) {
-                startActivity(new Intent(this, MainActivity.class));
-                finish();
-                return true;
-            } else if (itemId == R.id.nav_profile) {
-                startActivity(new Intent(this, ProfileActivity.class));
-                finish();
-                return true;
-            } else if (itemId == R.id.nav_notifications) {
-                startActivity(new Intent(this, NotificationActivity.class));
-                finish();
-                return true;
-            } else if (itemId == R.id.nav_friends) {
-                return true;
-            } else if (itemId == R.id.nav_menu) {
-                // Show menu dialog if needed or handle accordingly
-                return true;
-            }
-            return false;
-        });
     }
 
     private void setupAdapter() {
@@ -135,18 +100,18 @@ public class SocialActivity extends AppCompatActivity {
     private void refreshContent() {
         int position = tabLayout.getSelectedTabPosition();
         displayList.clear();
+        userAdapter.notifyDataSetChanged();
         etSearch.setText("");
 
-        if (position == 0) { // Search
+        if (position == 0) {
             llSearch.setVisibility(View.VISIBLE);
-        } else if (position == 1) { // Requests
+        } else if (position == 1) {
             llSearch.setVisibility(View.GONE);
             loadPendingRequests();
-        } else if (position == 2) { // Friends
+        } else if (position == 2) {
             llSearch.setVisibility(View.GONE);
             loadFriendsList();
         }
-        userAdapter.notifyDataSetChanged();
     }
 
     private void searchUsers(String query) {
@@ -159,14 +124,11 @@ public class SocialActivity extends AppCompatActivity {
                     displayList.clear();
                     for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
                         User user = doc.toObject(User.class);
-                        if (!user.getId().equals(currentUserId)) {
+                        if (user.getId() != null && !user.getId().equals(currentUserId)) {
                             displayList.add(user);
                         }
                     }
                     userAdapter.notifyDataSetChanged();
-                    if (displayList.isEmpty()) {
-                        Toast.makeText(this, "Không tìm thấy người dùng", Toast.LENGTH_SHORT).show();
-                    }
                 });
     }
 
@@ -177,15 +139,21 @@ public class SocialActivity extends AppCompatActivity {
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     displayList.clear();
+                    if (queryDocumentSnapshots.isEmpty()) {
+                        userAdapter.notifyDataSetChanged();
+                        return;
+                    }
                     for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
                         String requesterId = doc.getString("userId");
-                        db.collection("users").document(requesterId).get()
-                                .addOnSuccessListener(userDoc -> {
-                                    if (userDoc.exists()) {
-                                        displayList.add(userDoc.toObject(User.class));
-                                        userAdapter.notifyDataSetChanged();
-                                    }
-                                });
+                        if (requesterId != null) {
+                            db.collection("users").document(requesterId).get()
+                                    .addOnSuccessListener(userDoc -> {
+                                        if (userDoc.exists()) {
+                                            displayList.add(userDoc.toObject(User.class));
+                                            userAdapter.notifyDataSetChanged();
+                                        }
+                                    });
+                        }
                     }
                 });
     }
@@ -199,20 +167,15 @@ public class SocialActivity extends AppCompatActivity {
                     for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
                         String uid = doc.getString("userId");
                         String fid = doc.getString("friendId");
-                        String friendId = uid.equals(currentUserId) ? fid : (fid.equals(currentUserId) ? uid : null);
+                        String friendId = currentUserId.equals(uid) ? fid : (currentUserId.equals(fid) ? uid : null);
                         
                         if (friendId != null) {
                             db.collection("users").document(friendId).get()
                                     .addOnSuccessListener(userDoc -> {
                                         if (userDoc.exists()) {
                                             User friend = userDoc.toObject(User.class);
-                                            // Tránh add trùng nếu query trả về nhiều kết quả
-                                            boolean exists = false;
-                                            for(User u : displayList) if(u.getId().equals(friend.getId())) exists = true;
-                                            if(!exists) {
-                                                displayList.add(friend);
-                                                userAdapter.notifyDataSetChanged();
-                                            }
+                                            displayList.add(friend);
+                                            userAdapter.notifyDataSetChanged();
                                         }
                                     });
                         }
@@ -231,6 +194,8 @@ public class SocialActivity extends AppCompatActivity {
                     for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
                         String uid = doc.getString("userId");
                         String fid = doc.getString("friendId");
+                        if (uid == null || fid == null) continue;
+
                         if ((uid.equals(currentUserId) && fid.equals(user.getId())) ||
                             (uid.equals(user.getId()) && fid.equals(currentUserId))) {
                             friendshipId = doc.getId();
@@ -241,55 +206,56 @@ public class SocialActivity extends AppCompatActivity {
                     }
 
                     if (status == null) {
-                        // Send request
-                        Map<String, Object> friendship = new HashMap<>();
-                        friendship.put("userId", currentUserId);
-                        friendship.put("friendId", user.getId());
-                        friendship.put("status", "PENDING");
-                        db.collection("friendships").add(friendship)
-                                .addOnSuccessListener(documentReference -> {
-                                    Toast.makeText(this, "Đã gửi lời mời", Toast.LENGTH_SHORT).show();
-                                    refreshContent();
-                                    // Tạo thông báo
-                                    Notification notif = new Notification(user.getEmail(), currentUserName + " đã gửi cho bạn lời mời kết bạn", System.currentTimeMillis());
-                                    db.collection("notifications").add(notif);
-                                });
+                        sendFriendRequest(user);
                     } else if (status.equals("PENDING")) {
-                        if (!initiatorId.equals(currentUserId)) {
-                            // Accept request
-                            db.collection("friendships").document(friendshipId).update("status", "ACCEPTED")
-                                    .addOnSuccessListener(aVoid -> {
-                                        Toast.makeText(this, "Đã chấp nhận kết bạn", Toast.LENGTH_SHORT).show();
-                                        refreshContent();
-                                        // Thông báo cho người gửi
-                                        Notification notif = new Notification(user.getEmail(), currentUserName + " đã chấp nhận lời mời kết bạn", System.currentTimeMillis());
-                                        db.collection("notifications").add(notif);
-                                    });
+                        if (!currentUserId.equals(initiatorId)) {
+                            acceptFriendRequest(friendshipId, user);
                         }
                     } else if (status.equals("ACCEPTED")) {
-                        // Unfriend
-                        String finalFriendshipId = friendshipId;
-                        new AlertDialog.Builder(this)
-                                .setTitle("Hủy kết bạn")
-                                .setMessage("Bạn có chắc chắn muốn hủy kết bạn với " + user.getFullName() + "?")
-                                .setPositiveButton("Hủy", (dialog, which) -> {
-                                    db.collection("friendships").document(finalFriendshipId).delete()
-                                            .addOnSuccessListener(aVoid -> {
-                                                Toast.makeText(this, "Đã hủy kết bạn", Toast.LENGTH_SHORT).show();
-                                                refreshContent();
-                                            });
-                                })
-                                .setNegativeButton("Quay lại", null)
-                                .show();
+                        unfriend(friendshipId, user);
                     }
                 });
+    }
+
+    private void sendFriendRequest(User user) {
+        Map<String, Object> friendship = new HashMap<>();
+        friendship.put("userId", currentUserId);
+        friendship.put("friendId", user.getId());
+        friendship.put("status", "PENDING");
+        db.collection("friendships").add(friendship).addOnSuccessListener(doc -> {
+            Toast.makeText(this, "Đã gửi lời mời", Toast.LENGTH_SHORT).show();
+            userAdapter.notifyDataSetChanged();
+            sendNotification(user.getEmail(), currentUserName + " đã gửi lời mời kết bạn");
+        });
+    }
+
+    private void acceptFriendRequest(String friendshipId, User user) {
+        db.collection("friendships").document(friendshipId).update("status", "ACCEPTED")
+                .addOnSuccessListener(aVoid -> {
+                    Toast.makeText(this, "Đã chấp nhận kết bạn", Toast.LENGTH_SHORT).show();
+                    refreshContent();
+                    sendNotification(user.getEmail(), currentUserName + " đã chấp nhận lời mời kết bạn");
+                });
+    }
+
+    private void unfriend(String friendshipId, User user) {
+        new AlertDialog.Builder(this)
+                .setTitle("Hủy kết bạn")
+                .setMessage("Hủy kết bạn với " + user.getFullName() + "?")
+                .setPositiveButton("Hủy", (dialog, which) -> {
+                    db.collection("friendships").document(friendshipId).delete()
+                            .addOnSuccessListener(aVoid -> {
+                                Toast.makeText(this, "Đã hủy kết bạn", Toast.LENGTH_SHORT).show();
+                                refreshContent();
+                            });
+                })
+                .setNegativeButton("Quay lại", null).show();
     }
 
     private void handleDeclineAction(User user) {
         db.collection("friendships")
                 .whereEqualTo("friendId", currentUserId)
                 .whereEqualTo("userId", user.getId())
-                .whereEqualTo("status", "PENDING")
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     for (QueryDocumentSnapshot doc : queryDocumentSnapshots) {
@@ -299,5 +265,11 @@ public class SocialActivity extends AppCompatActivity {
                         });
                     }
                 });
+    }
+
+    private void sendNotification(String email, String content) {
+        if (email == null) return;
+        Notification notif = new Notification(email, content, System.currentTimeMillis());
+        db.collection("notifications").add(notif);
     }
 }
