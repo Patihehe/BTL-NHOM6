@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
@@ -22,6 +23,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
@@ -37,10 +39,11 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
     private RecyclerView rvUserPosts;
     private PostAdapter postAdapter;
     private List<Post> userPostList;
-    private FirebaseFirestore db; // Chuyển sang Firestore
+    private FirebaseFirestore db; 
     private User profileUser;
     private String profileUserId;
     private String currentUserId;
+    private FirebaseAuth mAuth;
 
     private boolean isChangingAvatar = false;
 
@@ -71,6 +74,7 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         setContentView(R.layout.activity_profile);
 
         db = FirebaseFirestore.getInstance();
+        mAuth = FirebaseAuth.getInstance();
         SharedPreferences pref = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         currentUserId = pref.getString("current_user_id", "");
 
@@ -183,6 +187,7 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
         EditText etEditLocation = view.findViewById(R.id.etEditLocation);
         Button btnChangeAvatar = view.findViewById(R.id.btnChangeAvatar);
         Button btnChangeCover = view.findViewById(R.id.btnChangeCover);
+        Button btnChangePassword = view.findViewById(R.id.btnChangePassword);
 
         etEditName.setText(profileUser.getFullName());
         etEditBio.setText(profileUser.getBio());
@@ -213,16 +218,39 @@ public class ProfileActivity extends AppCompatActivity implements PostAdapter.On
             pickImageLauncher.launch("image/*");
         });
 
+        btnChangePassword.setOnClickListener(v -> {
+            showChangePasswordDialog();
+        });
+
         dialog.show();
     }
 
-    @Override
-    public void onCommentClick(Post post) {
-        // Logic comment Firestore
+    private void showChangePasswordDialog() {
+        EditText newPassword = new EditText(this);
+        newPassword.setHint("Nhập mật khẩu mới");
+        newPassword.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Đổi mật khẩu")
+                .setMessage("Nhập mật khẩu mới cho tài khoản của bạn:")
+                .setView(newPassword)
+                .setPositiveButton("Cập nhật", (dialog, which) -> {
+                    String password = newPassword.getText().toString().trim();
+                    if (password.length() < 6) {
+                        Toast.makeText(this, "Mật khẩu phải ít nhất 6 ký tự", Toast.LENGTH_SHORT).show();
+                    } else if (mAuth.getCurrentUser() != null) {
+                        mAuth.getCurrentUser().updatePassword(password)
+                                .addOnSuccessListener(aVoid -> Toast.makeText(ProfileActivity.this, "Đã đổi mật khẩu thành công!", Toast.LENGTH_SHORT).show())
+                                .addOnFailureListener(e -> Toast.makeText(ProfileActivity.this, "Lỗi: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                    }
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
     }
 
     @Override
-    public void onShareClick(Post post) {
-        // Logic share Firestore
-    }
+    public void onCommentClick(Post post) {}
+
+    @Override
+    public void onShareClick(Post post) {}
 }

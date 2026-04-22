@@ -7,6 +7,7 @@ public class Post {
     private String content;
     private String imageUri;
     private long timestamp;
+    private String privacy; // "public", "friends", "private"
 
     // Cần constructor rỗng cho Firebase
     public Post() {}
@@ -17,6 +18,16 @@ public class Post {
         this.content = content;
         this.imageUri = imageUri;
         this.timestamp = timestamp;
+        this.privacy = "public"; // Mặc định là công khai
+    }
+
+    public Post(String userId, String userName, String content, String imageUri, long timestamp, String privacy) {
+        this.userId = userId;
+        this.userName = userName;
+        this.content = content;
+        this.imageUri = imageUri;
+        this.timestamp = timestamp;
+        this.privacy = privacy;
     }
 
     public String getPostId() { return postId; }
@@ -36,4 +47,7 @@ public class Post {
 
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+
+    public String getPrivacy() { return privacy; }
+    public void setPrivacy(String privacy) { this.privacy = privacy; }
 }

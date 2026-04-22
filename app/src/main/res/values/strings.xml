@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">BTL-NHOM6</string>
+    <string-array name="privacy_options">
+        <item>Công khai</item>
+        <item>Bạn bè</item>
+        <item>Chỉ mình tôi</item>
+    </string-array>
 </resources>

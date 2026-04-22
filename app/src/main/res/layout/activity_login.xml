@@ -45,6 +45,14 @@
         android:padding="12dp"/>
 
     <TextView
+        android:id="@+id/tvForgotPassword"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Forgot Password?"
+        android:textColor="#1877F2"
+        android:layout_marginTop="15dp"/>
+
+    <TextView
         android:id="@+id/tvRegister"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
