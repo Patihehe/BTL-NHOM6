@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.bumptech.glide.Glide;
 import com.google.android.material.badge.BadgeDrawable;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
@@ -43,6 +44,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     private ImageButton btnPickImage, btnClearImage, btnMessenger;
     private Spinner spinnerPrivacy;
     private ImageView ivUserAvatarMain;
+    private TextView tvMessengerBadge; // Badge cho tin nhắn
     private RecyclerView recyclerViewPosts;
     private PostAdapter postAdapter;
     private List<Post> postList;
@@ -108,6 +110,7 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         btnPickImage = findViewById(R.id.btnPickImage);
         btnClearImage = findViewById(R.id.btnClearImage);
         btnMessenger = findViewById(R.id.btnMessenger);
+        tvMessengerBadge = findViewById(R.id.tvMessengerBadge); // Ánh xạ badge tin nhắn
         ivUserAvatarMain = findViewById(R.id.ivUserAvatarMain);
         recyclerViewPosts = findViewById(R.id.recyclerViewPosts);
         spinnerPrivacy = findViewById(R.id.spinnerPrivacy);
@@ -120,8 +123,10 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         recyclerViewPosts.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewPosts.setAdapter(postAdapter);
 
+        listenToUserInfo();
         loadFriendsAndListenPosts();
         listenForNotifications();
+        listenForUnreadMessages(); // Bắt đầu lắng nghe tin nhắn chưa đọc
 
         if(btnPickImage != null) btnPickImage.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
         if(btnClearImage != null) btnClearImage.setOnClickListener(v -> {
@@ -160,6 +165,8 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
         });
 
         if(btnMessenger != null) btnMessenger.setOnClickListener(v -> {
+            // Khi nhấn vào messenger, xóa badge (số đỏ)
+            if(tvMessengerBadge != null) tvMessengerBadge.setVisibility(View.GONE);
             Intent intent = new Intent(MainActivity.this, ChatListActivity.class);
             startActivity(intent);
         });
@@ -200,6 +207,44 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
                 return false;
             });
         }
+    }
+
+    private void listenToUserInfo() {
+        db.collection("users").document(currentUserId)
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) return;
+                    if (value != null && value.exists()) {
+                        User user = value.toObject(User.class);
+                        if (user != null) {
+                            currentUserName = user.getFullName();
+                            if (user.getAvatarUri() != null && !user.getAvatarUri().isEmpty()) {
+                                Glide.with(MainActivity.this)
+                                        .load(user.getAvatarUri())
+                                        .placeholder(R.drawable.ic_launcher_background)
+                                        .into(ivUserAvatarMain);
+                            }
+                        }
+                    }
+                });
+    }
+
+    private void listenForUnreadMessages() {
+        if (tvMessengerBadge == null) return;
+        db.collection("messages")
+                .whereEqualTo("receiverEmail", currentUserEmail)
+                .whereEqualTo("isRead", false)
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) return;
+                    if (value != null) {
+                        int count = value.size();
+                        if (count > 0) {
+                            tvMessengerBadge.setText(String.valueOf(count));
+                            tvMessengerBadge.setVisibility(View.VISIBLE);
+                        } else {
+                            tvMessengerBadge.setVisibility(View.GONE);
+                        }
+                    }
+                });
     }
     
     private void markAllNotificationsAsRead() {
@@ -328,15 +373,19 @@ public class MainActivity extends AppCompatActivity implements PostAdapter.OnPos
     }
 
     private void showDeleteConfirmDialog(Post post) {
-        new AlertDialog.Builder(this)
-                .setTitle("Xóa bài viết")
-                .setMessage("Bạn có chắc chắn muốn xóa bài viết này không?")
-                .setPositiveButton("Xóa", (dialog, which) -> {
-                    db.collection("posts").document(post.getPostId()).delete();
-                    Toast.makeText(MainActivity.this, "Đã xóa bài viết", Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("Hủy", null)
-                .show();
+        if (post.getUserId().equals(currentUserId)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Xóa bài viết")
+                    .setMessage("Bạn có chắc chắn muốn xóa bài viết này không?")
+                    .setPositiveButton("Xóa", (dialog, which) -> {
+                        db.collection("posts").document(post.getPostId()).delete();
+                        Toast.makeText(MainActivity.this, "Đã xóa bài viết", Toast.LENGTH_SHORT).show();
+                    })
+                    .setNegativeButton("Hủy", null)
+                    .show();
+        } else {
+            Toast.makeText(this, "Bạn không có quyền xóa bài viết của người khác!", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override

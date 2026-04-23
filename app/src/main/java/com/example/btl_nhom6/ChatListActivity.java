@@ -41,7 +41,8 @@ public class ChatListActivity extends AppCompatActivity {
         tvNoChats = findViewById(R.id.tvNoChats);
 
         chatUsers = new ArrayList<>();
-        adapter = new RecentChatAdapter(chatUsers, user -> {
+        // Sửa lỗi: Truyền thêm currentUserEmail vào constructor của RecentChatAdapter
+        adapter = new RecentChatAdapter(chatUsers, currentUserEmail, user -> {
             Intent intent = new Intent(ChatListActivity.this, ChatActivity.class);
             intent.putExtra("receiver_email", user.getEmail());
             intent.putExtra("receiver_name", user.getFullName());

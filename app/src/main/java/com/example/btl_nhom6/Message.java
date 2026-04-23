@@ -1,11 +1,14 @@
 package com.example.btl_nhom6;
 
+import com.google.firebase.firestore.PropertyName;
+
 public class Message {
     private String messageId;
     private String senderEmail;
     private String receiverEmail;
     private String content;
     private long timestamp;
+    private boolean read; // Trạng thái đã đọc
 
     public Message() {}
 
@@ -14,6 +17,7 @@ public class Message {
         this.receiverEmail = receiverEmail;
         this.content = content;
         this.timestamp = timestamp;
+        this.read = false;
     }
 
     public String getMessageId() { return messageId; }
@@ -26,4 +30,9 @@ public class Message {
     public void setContent(String content) { this.content = content; }
     public long getTimestamp() { return timestamp; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+
+    @PropertyName("isRead")
+    public boolean isRead() { return read; }
+    @PropertyName("isRead")
+    public void setRead(boolean read) { this.read = read; }
 }

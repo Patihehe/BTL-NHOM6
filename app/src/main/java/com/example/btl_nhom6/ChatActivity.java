@@ -17,6 +17,7 @@ import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.ArrayList;
@@ -30,7 +31,7 @@ public class ChatActivity extends AppCompatActivity {
     private ImageButton btnSendMessage;
     private ChatAdapter chatAdapter;
     private List<Message> messageList;
-    private FirebaseFirestore db; // Chuyển sang FirebaseFirestore
+    private FirebaseFirestore db; 
     private String currentUserEmail;
     private String receiverEmail;
 
@@ -60,14 +61,13 @@ public class ChatActivity extends AppCompatActivity {
         rvChatHistory.setLayoutManager(new LinearLayoutManager(this));
         rvChatHistory.setAdapter(chatAdapter);
 
-        listenForMessages(); // Lắng nghe tin nhắn Realtime từ Firebase
+        listenForMessages(); 
 
         btnSendMessage.setOnClickListener(v -> {
             String content = etMessageInput.getText().toString().trim();
             if (!content.isEmpty()) {
                 Message message = new Message(currentUserEmail, receiverEmail, content, System.currentTimeMillis());
                 
-                // Gửi tin nhắn lên collection "messages"
                 db.collection("messages").add(message)
                         .addOnSuccessListener(documentReference -> {
                             String id = documentReference.getId();
@@ -82,22 +82,23 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void listenForMessages() {
-        // Truy vấn lấy tin nhắn giữa 2 người (sender=A & receiver=B) HOẶC (sender=B & receiver=A)
-        // Lưu ý: Firestore không hỗ trợ truy vấn OR phức tạp kiểu này trực tiếp một cách dễ dàng với OrderBy.
-        // Cách đơn giản nhất là lắng nghe tất cả tin nhắn liên quan đến bạn và lọc ở Client hoặc dùng một ChatRoom ID.
-        // Ở đây để đơn giản, ta lắng nghe tất cả tin nhắn và lọc:
-        
         db.collection("messages")
                 .orderBy("timestamp", Query.Direction.ASCENDING)
                 .addSnapshotListener((value, error) -> {
                     if (error != null) return;
                     if (value != null) {
                         messageList.clear();
-                        for (com.google.firebase.firestore.QueryDocumentSnapshot doc : value) {
+                        for (QueryDocumentSnapshot doc : value) {
                             Message msg = doc.toObject(Message.class);
-                            // Lọc tin nhắn chỉ giữa 2 người này
                             if ((msg.getSenderEmail().equals(currentUserEmail) && msg.getReceiverEmail().equals(receiverEmail)) ||
                                 (msg.getSenderEmail().equals(receiverEmail) && msg.getReceiverEmail().equals(currentUserEmail))) {
+                                
+                                // LOGIC ĐÁNH DẤU ĐÃ ĐỌC:
+                                // Nếu bạn là người nhận và tin nhắn chưa được đọc
+                                if (msg.getReceiverEmail().equals(currentUserEmail) && !msg.isRead()) {
+                                    markMessageAsRead(doc.getId());
+                                }
+                                
                                 messageList.add(msg);
                             }
                         }
@@ -107,5 +108,9 @@ public class ChatActivity extends AppCompatActivity {
                         }
                     }
                 });
+    }
+
+    private void markMessageAsRead(String messageId) {
+        db.collection("messages").document(messageId).update("isRead", true);
     }
 }

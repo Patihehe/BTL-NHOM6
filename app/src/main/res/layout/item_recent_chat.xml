@@ -49,5 +49,15 @@
                 android:text="Last message content..."
                 android:textSize="14sp" />
         </LinearLayout>
+
+        <View
+            android:id="@+id/vUnreadDot"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:layout_marginStart="8dp"
+            android:background="@android:drawable/presence_online"
+            android:backgroundTint="#0084FF"
+            android:visibility="gone" />
+
     </LinearLayout>
 </androidx.cardview.widget.CardView>
